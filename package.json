@@ -1,0 +1,24 @@
+{
+  "name": "velox",
+  "version": "1.0.0",
+  "description": "Browser automation at terminal velocity. Zero dependencies. Any Chromium-family browser. Or no browser at all.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/velox.d.ts",
+  "bin": { "vlx": "./bin/vlx.js" },
+  "exports": {
+    ".": { "import": "./src/index.js", "types": "./types/velox.d.ts" },
+    "./lite": "./src/lite/engine.js",
+    "./cdp": "./src/cdp/browser.js"
+  },
+  "engines": { "node": ">=20" },
+  "files": ["src", "bin", "types", "README.md", "LICENSE"],
+  "scripts": {
+    "test": "node test/run.js",
+    "bench": "node test/bench.js",
+    "site": "node test/site/serve.js"
+  },
+  "keywords": ["automation", "scraping", "cdp", "browser", "playwright", "puppeteer", "fast"],
+  "license": "MIT"
+}

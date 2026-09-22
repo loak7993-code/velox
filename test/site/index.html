@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Velox Test Site</title>
+  <meta name="description" content="a page built to exercise velox">
+</head>
+<body>
+  <h1 id="main-title">Welcome to Velox</h1>
+  <p class="lead">Static content appears instantly.</p>
+
+  <div id="host"></div>
+  <template id="tpl">
+    <button class="cta">Shadow Button</button>
+  </template>
+
+  <div id="late-zone"></div>
+  <script>
+    // delayed content — exercises MutationObserver waits
+    setTimeout(() => {
+      const el = document.createElement('p');
+      el.id = 'late';
+      el.textContent = 'Late content has arrived';
+      document.getElementById('late-zone').appendChild(el);
+    }, 700);
+
+    // shadow DOM — exercises piercing
+    const host = document.getElementById('host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<div class="inner"><button class="cta">Shadow Button</button></div>';
+    root.querySelector('.cta').addEventListener('click', () => {
+      document.title = 'shadow clicked';
+      const d = document.createElement('div');
+      d.id = 'shadow-result';
+      d.textContent = 'clicked through shadow root';
+      document.body.appendChild(d);
+    });
+  </script>
+
+  <form id="login" action="/login" method="post">
+    <input name="user" id="user" placeholder="user" />
+    <input name="pass" id="pass" type="password" />
+    <button type="submit" id="go">Sign in</button>
+  </form>
+  <script>
+    document.getElementById('login').addEventListener('submit', (e) => {
+      e.preventDefault();
+      document.title = 'submitted:' + document.getElementById('user').value;
+    });
+  </script>
+
+  <iframe id="frame" src="/frame.html" width="400" height="120"></iframe>
+
+  <ul id="list">
+    <li class="item">alpha</li><li class="item">beta</li><li class="item">gamma</li>
+  </ul>
+
+  <table id="t">
+    <tr><th>name</th><th>qty</th></tr>
+    <tr><td>widgets</td><td>42</td></tr>
+    <tr><td>gadgets</td><td>7</td></tr>
+  </table>
+
+  <a href="/page2.html">Page Two</a>
+  <img src="/logo.svg" alt="logo" />
+
+  <script type="application/ld+json">
+    {"@type":"WebSite","name":"Velox Test"}
+  </script>
+
+  <div id="api-target"></div>
+  <script>
+    fetch('/api/data.json').then(r => r.json()).then(d => {
+      document.getElementById('api-target').textContent = 'api:' + d.hello;
+    });
+    fetch('/api/pixel.json').catch(()=>{});
+    fetch('https://tracker.example.com/px.gif').catch(()=>{});
+  </script>
+</body>
+</html>
