@@ -104,6 +104,41 @@ await browser.close();
    `Network.setBlockedURLs` — trackers die inside the network stack, your page
    loads faster and lighter.
 
+## Playwright parity
+
+Everything Playwright can do — mapped to velox (82/82 parity tests green):
+
+| Playwright | velox |
+|---|---|
+| `browser.newContext()` | `browser.newContext()` — isolated cookie jars, storageState, baseURL, httpCredentials, serviceWorkers:'block', bypassCSP, offline, permissions, recordVideo |
+| `context.storageState()` | `context.storageState(path)` / `{ storageState }` — same JSON format |
+| `launchPersistentContext()` | `velox.launchPersistentContext(dir, opts)` — real profile, survives restarts |
+| `page.getByRole/Text/Label/Placeholder/AltText/Title/TestId` | identical factories, in-page ARIA matching (`role=`, `label=`, … also usable as raw selectors) |
+| locator: `click/dblclick/tap/hover/focus/blur/type/press/fill/check/uncheck/setChecked/selectOption/selectText/dragTo/scrollIntoViewIfNeeded` | all present |
+| locator: `nth/first/last/filter({hasText,has})/all/allTextContents/boundingBox/ariaSnapshot/elementHandle` | all present |
+| `page.$eval/$eval/evaluateHandle/elementHandles` | present, plus handles support function-form `(el, arg) => …` |
+| `page.waitForRequest/Response/Event/Dialog/Popup/Download/Function/URL/LoadState` | all present, navigation-proof |
+| `page.route()` + `route.fulfill/abort/continue` | present, plus `route.fetch()` (real request server-side) and context-level routing |
+| `page.request` / `playwright.request` | `context.request.get/post/…` — shares the context cookie jar both ways |
+| network: `setOffline`, `emulateNetwork` (latency/throughput), HAR | present |
+| `page.on('websocket')` | present — frames sent/received, headers, close |
+| `page.on('worker')` / service workers | present — page-level auto-attach, `serviceWorkers: 'block'` |
+| `page.addInitScript/addScriptTag/addStyleTag` | present, removable |
+| `page.clock` | present — `install/setFixedTime/advance/fastForward` (virtual timers fire instantly on fastForward) |
+| `page.coverage` | `startJSCoverage/stopJSCoverage` + CSS coverage (Profiler/CSS domains) |
+| `page.accessibility.snapshot()` | present + `accessibility.yaml()` |
+| `context.startTracing/stopTracing` | present — DevTools-loadable `chrome://tracing` JSON (with screenshots) |
+| video recording | `page.video.start()/stop()` → animated **GIF**, encoded by a from-scratch zero-dep encoder (PNG-decode → palette → LZW) |
+| `page.screenshot({ mask, animations })` | present |
+| `expect(locator).toBeVisible/…` | `velox.expect()` — polling assertions (visible/hidden/checked/text/value/count/attr/title/url/cookie + `.not`) |
+| drag & drop | `page.dragAndDrop()`, `locator.dragTo()` |
+| downloads | `page.on('download')` → `{ url, suggestedFilename, path(), saveAs(), cancel(), finished() }` |
+| basic auth | `context.httpCredentials` (also proxy auth at launch) |
+| raw CDP | `page.createCDPSession()` / `context.newCDPSession()` |
+| element handles | `elementHandle()/elementHandles()` + `ElementHandle/JSHandle` classes |
+| Firefox/WebKit engines | **not supported** — they don't speak CDP (this is the one hard gap; use Chrome-family) |
+| test runner / inspector UI | out of scope — velox is the automation library; pair it with any runner |
+
 ## Feature map
 
 **Engines** auto (fetch → escalate) · lite (never launches) · cdp (always browser) · remote `connect('ws://…' | 'host:port')` · browser auto-discovery (Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Thorium, chrome-headless-shell, Linux/macOS/Windows) · `VELOX_BROWSER` env override
@@ -233,6 +268,9 @@ Run the suite: `npm test`.
   (`google-chrome`, not headless-shell) and a real profile for best results.
 - **Windows/macOS:** discovery covers standard install paths; CI containers
   work out of the box (auto `--no-sandbox`/`--disable-dev-shm-usage` as root).
+- **Snap Chromium on Linux** works for automation but its confinement can block
+  downloads to `/tmp` — point `VELOX_BROWSER` at a native binary (or pass
+  `downloads: '/path/in/home'`) if you need downloads there.
 
 ## License
 

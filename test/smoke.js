@@ -2,7 +2,7 @@
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
 
-const EXE = '/tmp/opencode/velox/.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+const EXE = process.env.VLOX_EXE || process.env.VELOX_BROWSER || '/tmp/opencode/velox/.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 const results = [];
 const check = (name, cond, extra = '') => {
   results.push([name, !!cond, extra]);

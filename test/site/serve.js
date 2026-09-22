@@ -1,30 +1,110 @@
-// velox :: test site static server (tiny, from scratch). Auto-picks a free port.
+// velox :: test site v2 — endpoints for the playwright-parity suite
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
 const DIR = new URL('.', import.meta.url).pathname;
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.css': 'text/css' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.css': 'text/css', '.bin': 'application/octet-stream' };
 
 export function createSite() {
   return http.createServer((req, res) => {
     const path = req.url.split('?')[0];
-    if (path === '/api/data.json') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      return res.end(JSON.stringify({ hello: 'world' }));
-    }
-    if (path === '/api/pixel.json') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      return res.end('{"px":1}');
-    }
-    if (path === '/slow.html') {
-      setTimeout(() => {
-        res.writeHead(200, { 'content-type': 'text/html' });
-        res.end('<html><body><h1>slow page</h1></body></html>');
-      }, 1500);
+
+    if (path === '/api/data.json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ hello: 'world' })); }
+    if (path === '/api/pixel.json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"px":1}'); }
+    if (path === '/api/echo' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ got: body, ct: req.headers['content-type'] || '' })); });
       return;
     }
-    if (path === '/redirect.html') { res.writeHead(302, { location: '/page2.html' }); return res.end(); }
+    if (path === '/setcookie') { res.writeHead(200, { 'set-cookie': 'fromserver=yes; Path=/; Max-Age=3600', 'content-type': 'text/html' }); return res.end('<html><body>cookie set</body></html>'); }
+    if (path === '/auth.html') {
+      const auth = req.headers.authorization;
+      if (!auth || auth !== 'Basic ' + Buffer.from('user:pass').toString('base64')) {
+        res.writeHead(401, { 'www-authenticate': 'Basic realm="test"' });
+        return res.end('auth required');
+      }
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end('<html><body><h1 id="authed">Authenticated!</h1></body></html>');
+    }
+    if (path === '/csp.html') {
+      res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; script-src 'self'" });
+      return res.end('<html><head><title>CSP Page</title></head><body><div id="csp-target">static</div></body></html>');
+    }
+    if (path === '/sw.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript' });
+      return res.end("self.addEventListener('install', (e) => self.skipWaiting()); self.addEventListener('fetch', () => {});");
+    }
+    if (path === '/download.bin') {
+      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="payload.bin"' });
+      return res.end(Buffer.alloc(2048, 7));
+    }
+    if (path === '/drag.html') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<!doctype html><html><body>
+        <style>#dropzone{width:200px;height:100px;border:2px solid #333;margin-top:20px}</style>
+        <div id="draggable" draggable="true">Drag me</div>
+        <div id="dropzone">Drop here</div>
+        <div id="drag-result">none</div>
+        <script>
+          var d = document.getElementById('draggable');
+          d.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', 'payload'); });
+          var z = document.getElementById('dropzone');
+          z.addEventListener('dragover', function (e) { e.preventDefault(); });
+          z.addEventListener('drop', function (e) {
+            e.preventDefault();
+            document.getElementById('drag-result').textContent = 'dropped:' + e.dataTransfer.getData('text/plain');
+          });
+          // mouse-based alternative (HTML5 DnD needs native events)
+          z.addEventListener('mouseup', function () { document.getElementById('drag-result').textContent = 'dropped:mouse'; });
+        </script></body></html>`);
+    }
+    if (path === '/clock.html') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<!doctype html><html><body>
+        <div id="clock">unpatched</div>
+        <div id="timer">pending</div>
+        <script>
+          function render() { document.getElementById('clock').textContent = new Date().toISOString(); }
+          render(); setInterval(render, 500);
+          setTimeout(function () { document.getElementById('timer').textContent = 'fired'; }, 30000);
+        </script></body></html>`);
+    }
+    if (path === '/workers.html') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<!doctype html><html><body>
+        <div id="w-out">none</div>
+        <script>
+          try {
+            var w = new Worker('/worker.js');
+            w.onmessage = function (e) { document.getElementById('w-out').textContent = 'worker:' + e.data; };
+            w.postMessage('ping');
+          } catch (e) { document.getElementById('w-out').textContent = 'no worker'; }
+        </script></body></html>`);
+    }
+    if (path === '/worker.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript' });
+      return res.end("self.onmessage = function(e){ postMessage(e.data + '-pong') };");
+    }
+    if (path === '/aria.html') {
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<!doctype html><html><head><title>ARIA Test</title></head><body>
+        <nav aria-label="main"><a href="/">Home</a></nav>
+        <h1>Form test</h1>
+        <form>
+          <label for="email">Email address</label>
+          <input id="email" placeholder="you@example.com" />
+          <button type="button" id="subscribe">Subscribe</button>
+        </form>
+        <img src="/logo.svg" alt="Velox logo" />
+        <div id="role-out">none</div>
+        <script>
+          document.getElementById('subscribe').addEventListener('click', function () {
+            document.getElementById('role-out').textContent = 'clicked:' + document.getElementById('email').value;
+          });
+        </script></body></html>`);
+    }
     if (path === '/spa.html') {
       res.writeHead(200, { 'content-type': 'text/html' });
       return res.end('<html><body><div id="app"></div><script src="/spa.js"></script></body></html>');
@@ -33,6 +113,12 @@ export function createSite() {
       res.writeHead(200, { 'content-type': 'text/javascript' });
       return res.end(`setTimeout(()=>{document.getElementById('app').innerHTML='<h1>Rendered by JS</h1><p id="js-done">spa content ready</p>'},400);`);
     }
+    if (path === '/slow.html') {
+      setTimeout(() => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<html><body><h1>slow page</h1></body></html>'); }, 1500);
+      return;
+    }
+    if (path === '/redirect.html') { res.writeHead(302, { location: '/page2.html' }); return res.end(); }
+
     const file = path === '/' ? '/index.html' : path;
     try {
       const body = readFileSync(join(DIR, file.slice(1)));

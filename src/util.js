@@ -51,6 +51,16 @@ export class Emitter {
     const any = this._h.get('*');
     if (any) for (const fn of [...any]) { try { fn(ev, ...args); } catch {} }
   }
+  /** Await the next occurrence of an event (optional predicate + timeout). */
+  waitForEvent(ev, { predicate, timeout = 30000 } = {}) {
+    return new Promise((resolve, reject) => {
+      const t = timeout > 0 ? setTimeout(() => { off(); reject(new Error(`Timeout ${timeout}ms waiting for event ${ev}`)); }, timeout) : null;
+      const off = this.on(ev, (p) => {
+        if (predicate && !predicate(p)) return;
+        clearTimeout(t); off(); resolve(p);
+      });
+    });
+  }
 }
 
 export function b64(str) { return Buffer.from(str, 'utf8').toString('base64'); }

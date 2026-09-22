@@ -5,6 +5,7 @@ const suites = [
   ['smoke (cdp core)', 'test/smoke.js'],
   ['lite + auto engine', 'test/lite.js'],
   ['pool', 'test/pool.js'],
+  ['playwright parity', 'test/parity.js'],
 ];
 
 let failed = 0;

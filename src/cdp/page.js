@@ -1,5 +1,5 @@
 // velox :: cdp/page.js — the page: navigation, actions, network, capture, emulation
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Emitter, sleep, withTimeout, TimeoutError, randInt, humanDelay } from '../util.js';
@@ -7,6 +7,12 @@ import { ENGINE_SOURCE } from './inject.js';
 import { STEALTH_SOURCE } from './stealth.js';
 import { DEVICES } from './devices.js';
 import { buildHar } from './har.js';
+import { Locator, byRoleSel, byTextSel, byLabelSel, byPlaceholderSel, byAltTextSel, byTitleSel, byTestIdSel } from './locator.js';
+import { JSHandle, ElementHandle, buildEvalExpr } from './handles.js';
+import { videoApi } from './screencast.js';
+import { Coverage } from './coverage.js';
+import { Accessibility } from './accessibility.js';
+import { Clock, CLOCK_SOURCE } from './clock.js';
 
 const KEYMAP = {
   enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
@@ -66,6 +72,15 @@ export class VeloxPage extends Emitter {
     this._rootOverride = null;     // frame scoping (same-origin iframe)
     this._fileChooserEnabled = false;
     this._screenshotCount = 0;
+    this.context = null;           // set by BrowserContext when scoped
+    this._baseURL = null;
+    this._httpCredentials = null;
+    this._pendingStorageState = null;
+    this._wsCounter = 0;
+    this.clock = new Clock(this);
+    this.video = videoApi(this);
+    this.coverage = new Coverage(this);
+    this.accessibility = new Accessibility(this);
   }
 
   get isClosed() { return this._closed; }
@@ -76,26 +91,56 @@ export class VeloxPage extends Emitter {
   async _init(opts = {}) {
     this._opts = opts;
     const s = this.session;
-    // single pipelined batch — all domain enables + engine injection fly at once
+    // wire events exactly once — _init may run again when auto-attach races an
+    // explicit newPage, and duplicate handlers would double-count everything
+    if (!this._wired) {
+      this._wired = true;
+      this._wireEvents();
+    }
+    // single pipelined batch — all domain enables fly at once
     const jobs = [
       s.send('Page.enable'),
       s.send('Runtime.enable'),
       s.send('Network.enable', { maxPostDataSize: 65536 }),
       s.send('Page.setLifecycleEventsEnabled', { enabled: true }),
     ];
-    this._wireEvents();
     await Promise.all(jobs).catch(() => {});
-    // scripts apply to every future navigation
-    const initScripts = [ENGINE_SOURCE, ...(opts.stealth ? [STEALTH_SOURCE] : []), ...(opts.initScripts || [])];
-    await Promise.all(initScripts.map((src) => s.send('Page.addScriptToEvaluateOnNewDocument', { source: src })));
+    // scripts apply to every future navigation (deduped per page — _init may run twice
+    // when auto-attach races an explicit newPage, and that must stay harmless)
+    this._initScriptSources = this._initScriptSources || new Set();
+    const initScripts = [
+      ENGINE_SOURCE,
+      ...(opts.stealth ? [STEALTH_SOURCE] : []),
+      ...(opts.clock ? [CLOCK_SOURCE] : []),
+      ...(opts.serviceWorkers === 'block' ? ['(function(){try{if(navigator.serviceWorker)navigator.serviceWorker.register=function(){return Promise.reject(new Error("service workers blocked by velox"))}}catch(e){}})()'] : []),
+      ...(opts.initScripts || []),
+    ];
+    const freshScripts = initScripts.filter((src) => !this._initScriptSources.has(src));
+    for (const src of freshScripts) this._initScriptSources.add(src);
+    await Promise.all(freshScripts.map((src) => s.send('Page.addScriptToEvaluateOnNewDocument', { source: src })));
     // and to the current document (about:blank) right now
     await s.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
     if (opts.stealth) await s.send('Runtime.evaluate', { expression: STEALTH_SOURCE }).catch(() => {});
+    if (opts.clock) await s.send('Runtime.evaluate', { expression: CLOCK_SOURCE }).catch(() => {});
+    if (opts.testIdAttribute && opts.testIdAttribute !== 'data-testid') {
+      await s.send('Page.addScriptToEvaluateOnNewDocument', { source: `__vlx && (__vlx.testIdAttr = ${JSON.stringify(opts.testIdAttribute)})` }).catch(() => {});
+      await s.send('Runtime.evaluate', { expression: `__vlx.testIdAttr = ${JSON.stringify(opts.testIdAttribute)}` }).catch(() => {});
+    }
+    if (opts.bypassCSP) await s.send('Page.setBypassCSP', { enabled: true }).catch(() => {});
+    if (opts.httpCredentials) this._httpCredentials = opts.httpCredentials;
+    if (opts.baseURL) this._baseURL = opts.baseURL;
+    if (opts.storageState) this._pendingStorageState = opts.storageState;
+    if (opts.context?._pendingStorageState) this._pendingStorageState = opts.context._pendingStorageState;
 
     // defaults
     this._dialogCfg = { action: opts.dialogs?.action || 'accept', promptText: opts.dialogs?.promptText || '' };
     if (opts.blockUrls || opts.ads) await this.block(opts.ads ? [...defaultBlocklist(), ...(opts.blockUrls || [])] : opts.blockUrls);
     if (opts.routes) for (const [pat, h] of Object.entries(opts.routes)) this.route(pat, h);
+    if (opts.httpCredentials) {
+      // basic-auth: intercept auth challenges
+      await s.send('Fetch.enable', { handleAuthRequests: true }).catch(() => {});
+      this._fetchOn = true;
+    }
     if (opts.headers) await this.setHeaders(opts.headers);
     if (opts.device) await this.emulate(opts.device);
     else if (opts.viewport !== null) await this.setViewport(...(opts.viewport || [1280, 720]), opts.viewportMeta || {});
@@ -145,10 +190,70 @@ export class VeloxPage extends Emitter {
     s.on('Network.responseReceived', (p) => this._onResponse(p));
     s.on('Network.loadingFinished', ({ requestId, timestamp, encodedDataLength }) => this._onDone(requestId, timestamp, encodedDataLength));
     s.on('Network.loadingFailed', ({ requestId, errorText, canceled, blockedReason }) => this._onDone(requestId, undefined, 0, { errorText, canceled, blockedReason }));
-    s.on('Page.downloadWillBegin', ({ guid, url, suggestedFilename }) => this.emit('download', { guid, url, filename: suggestedFilename, state: 'started', page: this }));
-    s.on('Page.downloadProgress', (p) => this.emit('download', { ...p, page: this }));
+    s.on('Page.downloadWillBegin', ({ guid, url, suggestedFilename }) => {
+      const dl = new Download(this, guid, url, suggestedFilename);
+      this._dlMap = this._dlMap || new Map();
+      this._dlMap.set(guid, dl);
+      this.emit('download', dl);
+    });
+    s.on('Page.downloadProgress', (p) => {
+      const dl = this._dlMap?.get(p.guid);
+      if (dl) dl._update(p);
+      else this.emit('download', { ...p, page: this });
+    });
     s.on('Page.fileChooserOpened', ({ mode, backendNodeId }) => this.emit('filechooser', { mode, backendNodeId, page: this, setFiles: (files) => s.send('DOM.setFileInputFiles', { files, backendNodeId }) }));
     s.on('Fetch.requestPaused', (p) => this._onPaused(p));
+    // workers + nested targets attach through the PAGE session
+    s.send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }).catch(() => {});
+    s.on('Target.attachedToTarget', ({ sessionId: childSid, targetInfo, waitingForDebugger }) => {
+      if (waitingForDebugger) this.conn.fire('Runtime.runIfWaitingForDebugger', {}, { sessionId: childSid });
+      if (!targetInfo) return;
+      if (targetInfo.type === 'worker' || targetInfo.type === 'service_worker' || targetInfo.type === 'shared_worker') {
+        const worker = {
+          type: targetInfo.type, url: targetInfo.url, sessionId: childSid,
+          targetId: targetInfo.targetId, page: this, browser: this.browser,
+          close: () => this.conn.send('Target.closeTarget', { targetId: targetInfo.targetId }).catch(() => {}),
+        };
+        this.emit('worker', worker);
+        this.browser.emit('worker', worker);
+        this.browser.emit(targetInfo.type === 'service_worker' ? 'serviceworker' : 'worker', worker);
+        if (this.browser.opts.serviceWorkers === 'block') worker.close();
+        return;
+      }
+      // OOPIF / other nested targets → usable child pages
+      if (targetInfo.type === 'iframe' || targetInfo.type === 'webview') {
+        const child = new VeloxPage(this.browser, childSid, targetInfo);
+        child.isFrame = true;
+        child.context = this.context;
+        this.browser._knownTargets.set(targetInfo.targetId, child);
+        this.browser._pages.add(child);
+        child.once('close', () => { this.browser._pages.delete(child); this.browser._knownTargets.delete(targetInfo.targetId); });
+        this.emit('frame', child);
+        this.browser.emit('frame', child);
+        child._init(this.context ? this.context.pageDefaults() : {}).catch(() => {});
+      }
+    });
+    s.on('Fetch.authRequired', (p) => {
+      // basic-auth challenge (context httpCredentials)
+      const cred = this._httpCredentials;
+      this.session.send('Fetch.continueWithAuth', {
+        requestId: p.requestId,
+        authChallengeResponse: cred
+          ? { response: 'ProvideCredentials', username: cred.username, password: cred.password }
+          : { response: 'DefaultAuthCredentials' },
+      }).catch(() => {});
+    });
+    // websocket tracking
+    s.on('Network.webSocketCreated', ({ requestId, url, initiator }) => {
+      const ws = new WebSocketTracker(this, requestId, url);
+      this._ws = this._ws || new Map();
+      this._ws.set(requestId, ws);
+      this.emit('websocket', ws);
+    });
+    s.on('Network.webSocketFrameSent', ({ requestId, response, timestamp }) => this._ws?.get(requestId)?.frame('sent', response, timestamp));
+    s.on('Network.webSocketFrameReceived', ({ requestId, response, timestamp }) => this._ws?.get(requestId)?.frame('received', response, timestamp));
+    s.on('Network.webSocketClosed', ({ requestId, timestamp }) => this._ws?.get(requestId)?.closed(timestamp));
+    s.on('Network.webSocketHandshakeResponseOccurred', ({ requestId, response }) => this._ws?.get(requestId)?.handshake(response));
     s.on('Inspector.detached', () => { this._closed = true; this.emit('close'); });
     s.on('Page.crashed', () => this.emit('crash'));
     this.conn.on('Target.detachedFromTarget', ({ sessionId, targetId }) => {
@@ -178,8 +283,23 @@ export class VeloxPage extends Emitter {
   /* ---------------------------------------------- navigation --------------------------------------------- */
 
   async goto(url, { waitUntil = 'interactive', timeout = 30000, referer } = {}) {
-    if (!/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = 'https://' + url;
+    if (this._baseURL && !/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = new URL(url, this._baseURL).href;
+    else if (!/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = 'https://' + url;
+    if (this._fetchReady) await this._fetchReady;   // let Fetch.enable land before navigating
     const t0 = Date.now();
+    // apply a pending Playwright-format storage state (cookies + localStorage) on first real navigation
+    if (this._pendingStorageState && /^https?:/i.test(url)) {
+      const state = this._pendingStorageState;
+      this._pendingStorageState = null;
+      if (state.cookies?.length) await this.setCookies(state.cookies).catch(() => {});
+      const origin = new URL(url).origin;
+      const forOrigin = (state.origins || []).find((o) => o.origin === origin);
+      if (forOrigin?.localStorage?.length) {
+        await this.session.send('Page.addScriptToEvaluateOnNewDocument', {
+          source: `(function(){try{${forOrigin.localStorage.map((kv) => `localStorage.setItem(${JSON.stringify(kv.name)}, ${JSON.stringify(kv.value)})`).join(';')}}catch(e){}})()`,
+        }).catch(() => {});
+      }
+    }
     // drop stale lifecycle state (e.g. about:blank's DOMContentLoaded) so the
     // wait below can only be satisfied by THIS navigation's events
     this._life = {};
@@ -252,7 +372,8 @@ export class VeloxPage extends Emitter {
 
   /* ----------------------------------------------- evaluate ---------------------------------------------- */
 
-  async eval(js, { awaitPromise = true, timeout } = {}) {
+  async eval(jsOrFn, arg, { awaitPromise = true, timeout } = {}) {
+    const js = typeof jsOrFn === 'function' ? buildEvalExpr(jsOrFn, arg) : jsOrFn;
     try {
       const { result, exceptionDetails } = await this.session.send('Runtime.evaluate', {
         expression: js, returnByValue: true, awaitPromise,
@@ -272,9 +393,48 @@ export class VeloxPage extends Emitter {
       throw e;
     }
   }
+  /** Alias matching Playwright's name. */
+  evaluate(jsOrFn, arg, opts) { return this.eval(jsOrFn, arg, opts); }
 
   /** Sync evaluation — every __vlx data function is synchronous, so skip promise awaiting. */
-  evalSync(js) { return this.eval(js, { awaitPromise: false }); }
+  evalSync(js) { return this.eval(js, undefined, { awaitPromise: false }); }
+
+  /** Evaluate and return a remote-object handle instead of a value. */
+  async evaluateHandle(jsOrFn, arg) {
+    const js = typeof jsOrFn === 'function' ? buildEvalExpr(jsOrFn, arg) : jsOrFn;
+    const { result, exceptionDetails } = await this.session.send('Runtime.evaluate', {
+      expression: js, returnByValue: false, awaitPromise: false,
+    });
+    if (exceptionDetails) throw new Error(`Eval error: ${exceptionDetails.exception?.description || exceptionDetails.text}`);
+    if (!result?.objectId) return new JSHandle(this, null, String(result?.value)); // primitives
+    const kind = (await this.session.send('Runtime.callFunctionOn', {
+      functionDeclaration: 'function(){ return (this && this.nodeType === 1) ? "element" : "object" }',
+      objectId: result.objectId, returnByValue: true,
+    }).catch(() => ({ result: { value: 'object' } }))).result?.value;
+    return kind === 'element' ? new ElementHandle(this, result.objectId, result.description) : new JSHandle(this, result.objectId, result.description);
+  }
+
+  /** Element handle for the first match of a selector. */
+  async elementHandle(sel) {
+    return this.evaluateHandle(`(function(){ if (typeof __vlx !== 'object') { ${ENGINE_SOURCE} } return __vlx.one(${JSON.stringify(sel)}) })()`);
+  }
+  async elementHandles(sel) {
+    return this.evaluateHandle(`(function(){ if (typeof __vlx !== 'object') { ${ENGINE_SOURCE} } return __vlx.match(${JSON.stringify(sel)}) })()`)
+      .then(async (arr) => {
+        const props = await arr.getProperties();
+        await arr.dispose();
+        return Object.values(props).filter((h) => h instanceof JSHandle).map((h) => new ElementHandle(this, h.objectId, h._preview));
+      });
+  }
+
+  /** $eval(sel, fn, arg) — run fn(element, arg) in the page on the first match. */
+  async $eval(sel, fn, arg, filters) {
+    return this.eval(`(function(){var el=__vlx.pick(${JSON.stringify(sel)}${filters && Object.keys(filters).length ? ',' + JSON.stringify(filters) : ''});if(!el)throw new Error('no element for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(el,${JSON.stringify(arg ?? null)})})()`);
+  }
+  /** $$eval(sel, fn, arg) — run fn(elements, arg) over all matches. */
+  async $$eval(sel, fn, arg) {
+    return this.eval(`(function(){var els=__vlx.match(${JSON.stringify(sel)});if(!els.length)throw new Error('no elements for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(els,${JSON.stringify(arg ?? null)})})()`);
+  }
 
   _root() {
     return this._rootOverride
@@ -293,6 +453,17 @@ export class VeloxPage extends Emitter {
   /* ---------------------------------------------- selectors ---------------------------------------------- */
 
   $(sel) { return new Locator(this, sel); }
+  locator(sel) { return new Locator(this, sel); }
+
+  // Playwright-style locator factories
+  getByRole(role, opts = {}) { return new Locator(this, byRoleSel(role, opts)); }
+  getByText(text, opts = {}) { return new Locator(this, byTextSel(text, opts.exact)); }
+  getByLabel(text, opts = {}) { return new Locator(this, byLabelSel(text, opts.exact)); }
+  getByPlaceholder(text, opts = {}) { return new Locator(this, byPlaceholderSel(text, opts.exact)); }
+  getByAltText(text, opts = {}) { return new Locator(this, byAltTextSel(text, opts.exact)); }
+  getByTitle(text, opts = {}) { return new Locator(this, byTitleSel(text, opts.exact)); }
+  getByTestId(id) { return new Locator(this, byTestIdSel(id)); }
+
   $$(sel) { return this.extract(sel, { tag: true }); }
 
   text(sel) { return this.evalSync(this._x('text', sel)); }
@@ -307,15 +478,16 @@ export class VeloxPage extends Emitter {
   texts(sel, limit) { return this.evalSync(this._x('texts', sel, limit || 0)); }
   attrs(sel, name, limit) { return this.evalSync(this._x('attrs', sel, name, limit || 0)); }
 
-  async waitForSelector(sel, { timeout = 10000, state = 'visible' } = {}) {
+  async waitForSelector(sel, { timeout = 10000, state = 'visible', _filters } = {}) {
     const deadline = Date.now() + timeout;
+    const expr = (_filters && Object.keys(_filters).length)
+      ? `__vlx.waitPick(${JSON.stringify(sel)}, ${JSON.stringify(_filters)}, SLICE, ${JSON.stringify(state)})`
+      : `__vlx.wait(${JSON.stringify(sel)}, SLICE, ${JSON.stringify(state)}${this._rootOverride ? ', ' + this._root() : ''})`;
     for (;;) {
       const slice = Math.max(300, Math.min(1500, deadline - Date.now()));
+      const finalExpr = expr.replace(/SLICE/g, String(slice));
       try {
-        const ok = await withTimeout(
-          this.eval(this._x('wait', sel, slice, state), { awaitPromise: true }),
-          slice + 1500, 'wait-slice'
-        );
+        const ok = await withTimeout(this.eval(finalExpr, undefined, { awaitPromise: true }), slice + 1500, 'wait-slice');
         if (ok === true) return this.$(sel);
         if (ok === 'timeout') {
           if (Date.now() >= deadline) throw new TimeoutError(`selector ${sel} (${state})`, timeout);
@@ -334,15 +506,34 @@ export class VeloxPage extends Emitter {
     }
   }
   async waitForFunction(js, { timeout = 10000, message } = {}) {
-    return withTimeout(this.eval(`__vlx.waitExpr(${JSON.stringify(js)}, ${timeout})`, { awaitPromise: true }), timeout + 2000, message || js);
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const slice = Math.max(300, Math.min(1500, deadline - Date.now()));
+      try {
+        return await withTimeout(
+          this.eval(`__vlx.waitExpr(${JSON.stringify(js)}, ${slice})`, undefined, { awaitPromise: true }),
+          slice + 1500, 'waitfn-slice'
+        );
+      } catch (e) {
+        if ((e instanceof TimeoutError && e.message.includes('waitfn-slice')) ||
+            /Execution context|cannot find default|is not defined/i.test(e.message)) {
+          if (Date.now() >= deadline) throw new TimeoutError(message || js, timeout);
+          await sleep(60);
+          continue;
+        }
+        throw e;
+      }
+    }
   }
 
   /* ------------------------------------------------ actions --------------------------------------------- */
 
-  async click(sel, { timeout = 10000, button = 'left', clicks = 1, modifiers = [], delay = 0, inPage = false } = {}) {
-    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible' }), timeout, `click ${sel}`).catch((e) => { if (e instanceof TimeoutError && timeout <= 0) {} else throw e; });
+  async click(sel, { timeout = 10000, button = 'left', clicks = 1, modifiers = [], delay = 0, inPage = false, _filters } = {}) {
+    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `click ${sel}`).catch((e) => { if (e instanceof TimeoutError && timeout <= 0) {} else throw e; });
     if (inPage) { await this.eval(this._x('clickInPage', sel)); return; }
-    const p = await this.evalSync(this._x('point', sel));
+    const p = await this.evalSync(_filters && Object.keys(_filters).length
+      ? `__vlx.point(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}))`
+      : this._x('point', sel));
     if (!p) throw new Error(`Not clickable: ${sel}`);
     await this.mouse.click(p.x, p.y, { button, clicks, modifiers, delay });
     return this;
@@ -357,22 +548,53 @@ export class VeloxPage extends Emitter {
   async focus(sel) { return this.eval(this._x('focus', sel)); }
 
   /** Fast untrusted fill: sets value + fires input/change events. One round-trip. */
-  async fill(sel, value, { timeout = 10000 } = {}) {
-    await withTimeout(this.waitForSelector(sel, { timeout }), timeout, `fill ${sel}`);
-    const ok = await this.evalSync(this._x('fill', sel, value));
+  async fill(sel, value, { timeout = 10000, _filters } = {}) {
+    await withTimeout(this.waitForSelector(sel, { timeout, _filters }), timeout, `fill ${sel}`);
+    const ok = await this.evalSync(_filters && Object.keys(_filters).length
+      ? `__vlx.fill(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}), ${JSON.stringify(value)})`
+      : this._x('fill', sel, value));
     if (!ok) throw new Error(`Cannot fill: ${sel}`);
     return this;
   }
 
   /** Trusted per-key typing. human=true adds jittered delays. */
-  async type(sel, text, { delay = 0, human = false, timeout = 10000 } = {}) {
-    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible' }), timeout, `type ${sel}`);
-    await this.evalSync(this._x('focus', sel));
+  async type(sel, text, { delay = 0, human = false, timeout = 10000, _filters } = {}) {
+    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `type ${sel}`);
+    await this.evalSync(_filters && Object.keys(_filters).length
+      ? `__vlx.focus(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}))`
+      : this._x('focus', sel));
     for (const ch of String(text)) {
       await this.keyboard.sendChar(ch);
       if (human) await humanDelay(delay || 70);
       else if (delay) await sleep(delay);
     }
+    return this;
+  }
+
+  /** Mouse-based drag & drop between two selectors (HTML5 and mouse-driven UIs). */
+  async dragAndDrop(source, target, { steps = 12, _srcFilters, _dstFilters } = {}) {
+    const srcExpr = _srcFilters && Object.keys(_srcFilters).length
+      ? `__vlx.point(__vlx.pick(${JSON.stringify(source)},${JSON.stringify(_srcFilters)}))`
+      : this._x('point', source);
+    const dstExpr = _dstFilters && Object.keys(_dstFilters).length
+      ? `__vlx.point(__vlx.pick(${JSON.stringify(target)},${JSON.stringify(_dstFilters)}))`
+      : this._x('point', target);
+    await withTimeout(this.waitForSelector(source, { timeout: 10000, state: 'visible', _filters: _srcFilters }), 10000, `drag ${source}`);
+    await withTimeout(this.waitForSelector(target, { timeout: 10000, state: 'attached', _filters: _dstFilters }), 10000, `drop ${target}`);
+    const [a, b] = await Promise.all([this.evalSync(srcExpr), this.evalSync(dstExpr)]);
+    if (!a || !b) throw new Error(`Cannot drag: ${source} → ${target}`);
+    await this.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x, y: a.y, button: 'none' });
+    await this.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: a.x, y: a.y, button: 'left', clickCount: 1 });
+    // nudge to kick off HTML5 drag, then travel to the target
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      await this.session.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved', button: 'left',
+        x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+      });
+      await sleep(16);
+    }
+    await this.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: b.x, y: b.y, button: 'left', clickCount: 1 });
     return this;
   }
 
@@ -414,6 +636,7 @@ export class VeloxPage extends Emitter {
       async type(text, { delay = 0, human = false } = {}) {
         for (const ch of String(text)) { await this.sendChar(ch); if (human) await humanDelay(delay || 60); else if (delay) await sleep(delay); }
       },
+      async insertText(text) { return self.session.send('Input.insertText', { text: String(text) }); },
     };
   }
 
@@ -558,34 +781,42 @@ export class VeloxPage extends Emitter {
 
   /* ---------------------------------------------- screenshots -------------------------------------------- */
 
-  async screenshot({ path, full = false, selector, type = 'png', quality = 80, fast = false, clip } = {}) {
-    let clipArg = clip || undefined;
-    if (selector) {
-      const r = await this.evalSync(this._x('rect', selector));
-      if (!r) throw new Error(`No element for screenshot: ${selector}`);
-      const [sx, sy] = await this.eval('[scrollX, scrollY]');
-      clipArg = { x: r.x + sx, y: r.y + sy, width: r.width, height: r.height, scale: 1 };
-    } else if (full) {
-      let cs = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const m = await this.session.send('Page.getLayoutMetrics');
-        cs = m.cssContentSize || m.contentSize;
-        if (cs && cs.width > 0 && cs.height > 0) break;
-        await sleep(120); // layout not ready yet (page just navigated)
+  async screenshot({ path, full = false, selector, type = 'png', quality = 80, fast = false, clip, mask, animations } = {}) {
+    let maskId = null, froze = false;
+    try {
+      if (animations === 'disabled') { froze = true; await this.evalSync('__vlx.freezeAnimations()'); }
+      if (mask?.length) { maskId = await this.evalSync(`__vlx.mask(${JSON.stringify(mask)})`); }
+      let clipArg = clip || undefined;
+      if (selector) {
+        const r = await this.evalSync(this._x('rect', selector));
+        if (!r) throw new Error(`No element for screenshot: ${selector}`);
+        const [sx, sy] = await this.evalSync('[scrollX, scrollY]');
+        clipArg = { x: r.x + sx, y: r.y + sy, width: r.width, height: r.height, scale: 1 };
+      } else if (full) {
+        let cs = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const m = await this.session.send('Page.getLayoutMetrics');
+          cs = m.cssContentSize || m.contentSize;
+          if (cs && cs.width > 0 && cs.height > 0) break;
+          await sleep(120); // layout not ready yet (page just navigated)
+        }
+        if (!cs || cs.width <= 0 || cs.height <= 0) {
+          const v = await this.session.send('Page.getLayoutMetrics');
+          cs = v.cssVisualViewport || v.contentSize || { width: 1280, height: 720 };
+        }
+        clipArg = { x: 0, y: 0, width: Math.max(1, Math.ceil(cs.width)), height: Math.max(1, Math.ceil(cs.height)), scale: 1 };
       }
-      if (!cs || cs.width <= 0 || cs.height <= 0) {
-        const v = await this.session.send('Page.getLayoutMetrics');
-        cs = v.cssVisualViewport || v.contentSize || { width: 1280, height: 720 };
-      }
-      clipArg = { x: 0, y: 0, width: Math.max(1, Math.ceil(cs.width)), height: Math.max(1, Math.ceil(cs.height)), scale: 1 };
+      const { data } = await this.session.send('Page.captureScreenshot', {
+        format: type, quality: type === 'jpeg' ? quality : undefined,
+        ...(clipArg ? { clip: clipArg, captureBeyondViewport: true } : {}),
+        ...(fast && type === 'png' ? { optimizeForSpeed: true } : {}),
+      });
+      if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(data, 'base64')); }
+      return Buffer.from(data, 'base64');
+    } finally {
+      if (maskId) await this.evalSync(`__vlx.unmask(${JSON.stringify(maskId)})`).catch(() => {});
+      if (froze) await this.evalSync('__vlx.unfreezeAnimations()').catch(() => {});
     }
-    const { data } = await this.session.send('Page.captureScreenshot', {
-      format: type, quality: type === 'jpeg' ? quality : undefined,
-      ...(clipArg ? { clip: clipArg, captureBeyondViewport: true } : {}),
-      ...(fast && type === 'png' ? { optimizeForSpeed: true } : {}),
-    });
-    if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(data, 'base64')); }
-    return Buffer.from(data, 'base64');
   }
 
   async pdf({ path, format = 'A4', landscape = false, printBackground = true, margin, scale = 1, headerTemplate, footerTemplate, preferCSSPageSize = false } = {}) {
@@ -759,10 +990,12 @@ export class VeloxPage extends Emitter {
 
   /** Advanced interception: page.route('**/api/**', req => req.fulfill({ body: '[]' })) */
   route(pattern, handler) {
-    this._routes.push({ match: pattern instanceof RegExp ? pattern : globToRe(String(pattern)), handler });
+    // idempotent: same pattern + handler twice registers once
+    if (this._routes.some((r) => r.handler === handler && r.rawPattern === pattern)) return this;
+    this._routes.push({ match: pattern instanceof RegExp ? pattern : globToRe(String(pattern)), handler, rawPattern: pattern });
     if (!this._fetchOn) {
       this._fetchOn = true;
-      this.session.send('Fetch.enable', { patterns: [{ urlPattern: '*' }] }).catch(() => {});
+      this._fetchReady = this.session.send('Fetch.enable', { patterns: [{ urlPattern: '*' }], ...(this._httpCredentials ? { handleAuthRequests: true } : {}) }).catch(() => {});
     }
     return this;
   }
@@ -779,37 +1012,65 @@ export class VeloxPage extends Emitter {
 
   async _onPaused(p) {
     const { requestId, request, resourceType } = p;
+
+    // basic-auth challenge
+    if (p.authChallenge) {
+      const cred = this._httpCredentials;
+      return this.session.send('Fetch.continueWithAuth', {
+        requestId,
+        authChallengeResponse: cred
+          ? { response: 'ProvideCredentials', username: cred.username, password: cred.password }
+          : { response: 'DefaultAuthCredentials' },
+      }).catch(() => {});
+    }
+
     const req = {
       id: requestId, url: request.url, method: request.method, headers: request.headers,
       resourceType, postData: request.postData, page: this, _handled: false,
-      fulfill({ status = 200, headers = {}, body = '', contentType }) {
-        if (this._handled) return; this._handled = true;
+      fulfill({ status = 200, headers = {}, body = '', contentType, path: filePath }) {
+        if (this._handled) return Promise.resolve(); this._handled = true;
+        let buf = Buffer.isBuffer(body) ? body : Buffer.from(filePath ? readFileSync(filePath) : body);
         const hdrs = Object.entries({ ...(contentType ? { 'content-type': contentType } : {}), ...headers }).map(([name, value]) => ({ name, value: String(value) }));
         return this.page.session.send('Fetch.fulfillRequest', {
           requestId, responseCode: status, responseHeaders: hdrs,
-          body: Buffer.from(body).toString('base64'),
+          body: buf.toString('base64'),
         });
       },
       abort(reason = 'BlockedByClient') {
-        if (this._handled) return; this._handled = true;
-        return this.page.session.send('Fetch.failRequest', { requestId, errorReason: reason });
+        if (this._handled) return Promise.resolve(); this._handled = true;
+        return this.page.session.send('Fetch.failRequest', { requestId, errorReason: reason }).catch(() => {});
       },
       continue(overrides = {}) {
-        if (this._handled) return; this._handled = true;
+        if (this._handled) return Promise.resolve(); this._handled = true;
         return this.page.session.send('Fetch.continueRequest', {
           requestId,
           ...(overrides.url ? { url: overrides.url } : {}),
           ...(overrides.method ? { method: overrides.method } : {}),
           ...(overrides.headers ? { headers: Object.entries(overrides.headers).map(([name, value]) => ({ name, value: String(value) })) } : {}),
           ...(overrides.postData !== undefined ? { postData: String(overrides.postData) } : {}),
+        }).catch(() => {});
+      },
+      /** Perform the real request server-side (with page cookies) — for inspect-then-modify flows. */
+      async fetch() {
+        const { fetch: liteFetch } = await import('../lite/engine.js');
+        const cookies = await this.page.cookies([this.url]).catch(() => []);
+        const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+        const res = await liteFetch(this.url, {
+          method: this.method,
+          headers: { ...this.headers, ...(cookieHeader ? { cookie: cookieHeader } : {}) },
+          ...(this.postData !== undefined ? { body: this.postData } : {}),
         });
+        return { status: res.status, headers: res.headers, body: res.text(), buffer: res.body, json: () => res.json() };
       },
     };
     this.emit('requestpaused', req);
-    for (const r of this._routes) {
-      if (r.match.test(req.url)) {
-        try { await r.handler(req); } catch (e) { this.emit('routeError', { error: e, request: req }); }
-        if (req._handled) return;
+    const routeLists = [this._routes, (this.context?._routes || [])];
+    for (const routes of routeLists) {
+      for (const r of routes) {
+        if (r.match.test(req.url)) {
+          try { await r.handler(req); } catch (e) { this.emit('routeError', { error: e, request: req }); }
+          if (req._handled) return;
+        }
       }
     }
     if (!req._handled) req.continue().catch(() => {});
@@ -870,12 +1131,155 @@ export class VeloxPage extends Emitter {
   console() { return this._consoleBuffer; }
   errors() { return this._errorBuffer; }
 
+  /* ------------------------------------------- waits & events ------------------------------------------- */
+
+  /** Generic: await the next event with optional predicate. */
+  waitForEvent(name, { predicate, timeout = 30000 } = {}) {
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { off(); reject(new TimeoutError(`event ${name}`, timeout)); }, timeout);
+      const off = this.on(name, (p) => {
+        if (predicate && !predicate(p)) return;
+        clearTimeout(t); off(); resolve(p);
+      });
+    });
+  }
+
+  /** Wait for a request matching url (string/regex/predicate) → request entry. */
+  waitForRequest(match, { timeout = 30000 } = {}) {
+    const pred = toMatcher(match);
+    return this.waitForEvent('request', { predicate: (e) => pred(e.url), timeout });
+  }
+  /** Wait for a response matching url (string/regex/predicate) → request entry (with .response). */
+  waitForResponse(match, { timeout = 30000 } = {}) {
+    const pred = toMatcher(match);
+    return this.waitForEvent('response', { predicate: (e) => pred(e.url), timeout });
+  }
+  waitForRequestFinished(match, { timeout = 30000 } = {}) {
+    const pred = toMatcher(match);
+    return this.waitForEvent('requestfinished', { predicate: (e) => pred(e.url), timeout });
+  }
+  waitForDialog(timeout = 30000) { return this.waitForEvent('dialog', { timeout }); }
+  waitForPopup(timeout = 30000) {
+    return this.waitForEvent('popup', { timeout }).catch(() => this.waitForEvent('target', { timeout }));
+  }
+  waitForDownload(timeout = 30000) { return this.waitForEvent('download', { timeout }); }
+
+  /* ------------------------------------------ network emulation ------------------------------------------ */
+
+  /** Offline / throttling. */
+  async setOffline(offline = true) {
+    return this.emulateNetwork({ offline });
+  }
+  async emulateNetwork({ offline = false, latency = 0, downloadThroughput = -1, uploadThroughput = -1 } = {}) {
+    await this.session.send('Network.emulateNetworkConditions', {
+      offline, latency,
+      downloadThroughput: downloadThroughput < 0 ? -1 : downloadThroughput,
+      uploadThroughput: uploadThroughput < 0 ? -1 : uploadThroughput,
+    });
+    return this;
+  }
+
+  /* -------------------------------------------- init scripts -------------------------------------------- */
+
+  async addInitScript(fnOrSrc) {
+    const src = typeof fnOrSrc === 'function' ? `(${fnOrSrc.toString()})()` : fnOrSrc;
+    const { identifier } = await this.session.send('Page.addScriptToEvaluateOnNewDocument', { source: src });
+    this._initScriptIds = this._initScriptIds || [];
+    this._initScriptIds.push(identifier);
+    await this.session.send('Runtime.evaluate', { expression: src }).catch(() => {});
+    return identifier;
+  }
+  async removeInitScript(identifier) {
+    if (identifier == null) {
+      const ids = this._initScriptIds || [];
+      this._initScriptIds = [];
+      await Promise.all(ids.map((id) => this.session.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: id }).catch(() => {})));
+      return true;
+    }
+    this._initScriptIds = (this._initScriptIds || []).filter((i) => i !== identifier);
+    return this.session.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).then(() => true, () => false);
+  }
+
+  /** Inject a <script> (by url, content, or file path) into the live page. */
+  async addScriptTag({ url, content, path } = {}) {
+    if (path) content = readFileSync(path, 'utf8');
+    return this.eval(`(async function(){
+      var s = document.createElement('script');
+      ${url ? `s.src = ${JSON.stringify(url)};` : ''}
+      ${content ? `s.textContent = ${JSON.stringify(content)};` : ''}
+      var p = new Promise(function(res, rej){ s.onload = res; s.onerror = function(){ rej(new Error('script load failed')) }; setTimeout(res, 5000); });
+      document.head.appendChild(s);
+      await p;
+      return true;
+    })()`);
+  }
+  /** Inject a <style> (by url, content, or file path) into the live page. */
+  async addStyleTag({ url, content, path } = {}) {
+    if (path) content = readFileSync(path, 'utf8');
+    return this.eval(`(function(){
+      ${url
+        ? `var l = document.createElement('link'); l.rel='stylesheet'; l.href=${JSON.stringify(url)}; document.head.appendChild(l);`
+        : `var st = document.createElement('style'); st.textContent = ${JSON.stringify(content || '')}; document.head.appendChild(st);`}
+      return true;
+    })()`);
+  }
+
+  /* --------------------------------------------- emulation --------------------------------------------- */
+
+  async emulateMedia({ media, colorScheme, reducedMotion } = {}) {
+    const features = [];
+    if (colorScheme) features.push({ name: 'prefers-color-scheme', value: colorScheme });
+    if (reducedMotion) features.push({ name: 'prefers-reduced-motion', value: reducedMotion });
+    await this.session.send('Emulation.setEmulatedMedia', {
+      ...(media ? { media } : {}),
+      ...(features.length ? { features } : {}),
+    });
+    return this;
+  }
+  async setViewportSize(size) { return this.setViewport(size.width, size.height); }
+  async bringToFront() { return this.activate(); }
+  /** Raw CDP session for this page (power users). */
+  createCDPSession() { return this.session; }
+  get pages() { return this.context ? this.context.pages() : this.browser.pages(); }
+
+  /* ----------------------------------------------- frames ----------------------------------------------- */
+
+  /** Frames as objects with locator support (same-origin scoping). */
+  async frames() {
+    const tree = await this.frameTree();
+    return tree.map((f) => {
+      const frame = {
+        ...f,
+        page: this,
+        url: f.url,
+        locator: (sel) => { const l = new Locator(this, sel); l._frameRoot = f; return l; },
+      };
+      return frame;
+    });
+  }
+  mainFrame() { return (async () => (await this.frames())[0])(); }
+
+  /** Chainable frame locator (same-origin iframes): page.frameLocator('#comments').getByRole('button') */
+  frameLocator(sel) {
+    const scoped = Object.create(this);
+    scoped._rootOverride = sel;
+    scoped.$ = (s) => new Locator(scoped, s);
+    scoped.locator = (s) => new Locator(scoped, s);
+    for (const name of ['getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByAltText', 'getByTitle', 'getByTestId']) {
+      scoped[name] = (...a) => this[name](...a);
+    }
+    return scoped;
+  }
+
   async activate() { await this.conn.send('Target.activateTarget', { targetId: this.targetId }).catch(() => {}); return this; }
 
-  async close() {
+  async close({ runBeforeUnload = false } = {}) {
     if (this._closed) return;
     this._closed = true;
-    try { await this.conn.send('Target.closeTarget', { targetId: this.targetId }); } catch {}
+    try {
+      if (this.video?.recorder?._recording) await this.video.stop().catch(() => {});
+      await this.conn.send('Target.closeTarget', { targetId: this.targetId, ...(runBeforeUnload ? { runBeforeUnload: true } : {}) });
+    } catch {}
     this.conn.detach(this.session.sessionId);
     this.emit('close');
   }
@@ -901,21 +1305,98 @@ export function defaultBlocklist() {
   ];
 }
 
-/** Zero-handle locator: every call is one fresh round-trip (always current, no staleness). */
-export class Locator {
-  constructor(page, sel) { this.page = page; this.sel = sel; }
-  text() { return this.page.text(this.sel); }
-  attr(name) { return this.page.attr(this.sel, name); }
-  html() { return this.page.html(this.sel); }
-  count() { return this.page.count(this.sel); }
-  exists() { return this.page.exists(this.sel); }
-  val() { return this.page.val(this.sel); }
-  extract(spec) { return this.page.extract(this.sel, spec); }
-  waitFor(opts) { return this.page.waitForSelector(this.sel, opts); }
-  click(opts) { return this.page.click(this.sel, opts); }
-  hover(opts) { return this.page.hover(this.sel, opts); }
-  type(text, opts) { return this.page.type(this.sel, text, opts); }
-  fill(value, opts) { return this.page.fill(this.sel, value, opts); }
-  screenshot(opts) { return this.page.screenshot({ ...opts, selector: this.sel }); }
-  scrollIntoView() { return this.page.eval(`__vlx.point(${JSON.stringify(this.sel)})`); }
+/* ---------------------------------------------- helpers ---------------------------------------------- */
+
+function toMatcher(match) {
+  if (typeof match === 'function') return match;
+  if (match instanceof RegExp) return (u) => match.test(u);
+  if (typeof match === 'string' && match.includes('*')) {
+    const re = new RegExp('^' + match.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^]*').replace(/\u0000/g, '[^]*').replace(/\?/g, '.') + '$');
+    return (u) => re.test(u);
+  }
+  const s = String(match);
+  return (u) => u === s || u.startsWith(s + '?') || u.includes(s);
+}
+
+/** Download object handed to page.on('download', dl) / page.waitForDownload(). */
+export class Download {
+  constructor(page, guid, url, suggestedFilename) {
+    this.page = page;
+    this.guid = guid;
+    this.url = url;
+    this.suggestedFilename = suggestedFilename;
+    this.state = 'inProgress';
+    this.receivedBytes = 0;
+    this.totalBytes = 0;
+    this._done = null;
+    this._path = null;
+  }
+  _update(p) {
+    if (p.state) this.state = p.state;
+    if (p.receivedBytes != null) this.receivedBytes = p.receivedBytes;
+    if (p.totalBytes != null) this.totalBytes = p.totalBytes;
+    if ((p.state === 'completed' || p.state === 'canceled') && this._done) { this._done(); this._done = null; }
+  }
+  /** Resolves when the download finishes. */
+  finished(timeout = 30000) {
+    if (this.state === 'completed' || this.state === 'canceled') return Promise.resolve(this);
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new TimeoutError('download', timeout)), timeout);
+      this._done = () => { clearTimeout(t); resolve(this); };
+    });
+  }
+  /** Where the browser is writing it (allowAndName: guid file inside the download dir). */
+  path() {
+    const dir = this.page._downloads;
+    return dir ? join(dir, this.guid) : null;
+  }
+  /** Copy to a friendly filename once complete. */
+  async saveAs(target) {
+    if (this.state !== 'completed') await this.finished();
+    if (this.state === 'canceled') throw new Error('download canceled');
+    const src = this.path();
+    if (!src) throw new Error('download dir not configured');
+    const { copyFileSync, mkdirSync, existsSync } = await import('node:fs');
+    const { dirname } = await import('node:path');
+    // the browser renames its .crdownload temp to the guid name shortly AFTER
+    // reporting 'completed' — poll briefly for the file to appear
+    const deadline = Date.now() + 5000;
+    while (!existsSync(src) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    if (!existsSync(src)) throw new Error(`download file never appeared: ${src}`);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(src, target);
+    this._path = target;
+    return target;
+  }
+  async cancel() {
+    await this.page.conn.send('Browser.cancelDownload', { guid: this.guid }).catch(() => {});
+    this.state = 'canceled';
+    if (this._done) { this._done(); this._done = null; }
+  }
+  get filename() { return this.suggestedFilename; }
+}
+
+/** WebSocket tracker handed to page.on('websocket', ws). */
+export class WebSocketTracker extends Emitter {  constructor(page, id, url) {
+    super();
+    this.page = page;
+    this.id = id;
+    this.url = url;
+    this.framesSent = [];
+    this.framesReceived = [];
+    this.headers = null;
+    this.closedAt = null;
+  }
+  handshake(response) { this.headers = response?.headers || null; this.status = response?.status; }
+  frame(dir, payload, timestamp) {
+    let text = null;
+    try { text = Buffer.from(payload.payloadData, 'base64').toString('utf8'); } catch { text = payload.payloadData; }
+    const rec = { dir, text, opcode: payload.opcode, timestamp, ws: this };
+    (dir === 'sent' ? this.framesSent : this.framesReceived).push(rec);
+    this.emit(dir === 'sent' ? 'framesent' : 'framereceived', rec);
+  }
+  closed(timestamp) { this.closedAt = timestamp ?? Date.now() / 1000; this.emit('close', this); }
+  get isClosed() { return this.closedAt != null; }
 }

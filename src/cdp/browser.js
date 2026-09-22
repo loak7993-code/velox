@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CdpConnection } from './connection.js';
 import { findBrowser, discoverBrowsers } from './discovery.js';
 import { VeloxPage } from './page.js';
+import { BrowserContext } from './context.js';
 import { Emitter } from '../util.js';
 
 const HEADLESS_OK = (p) => !/headless-shell/i.test(p);
@@ -16,7 +17,7 @@ export class Browser extends Emitter {
     this.conn = conn;
     this.proc = proc;
     this.opts = opts;
-    this.pages = new Set();
+    this._pages = new Set();
     this._knownTargets = new Map();   // targetId -> VeloxPage (we manage these explicitly)
     this._pendingAttaches = new Set();
     this._userDataDir = opts._userDataDir || null;
@@ -34,20 +35,118 @@ export class Browser extends Emitter {
         autoAttach: true, waitForDebuggerOnStart: true, flatten: true,
       });
     } catch {}
+    this._contexts = new Map(); // browserContextId -> BrowserContext
+    this._defaultContext = null;
+
     this.conn.on('Target.attachedToTarget', async ({ sessionId, targetInfo, waitingForDebugger }) => {
       if (waitingForDebugger) this.conn.fire('Runtime.runIfWaitingForDebugger', {}, { sessionId });
       // we attached to this one ourselves (newPage) — skip, it's already managed
       if (this._knownTargets.has(targetInfo.targetId) || this._pendingAttaches.has(targetInfo.targetId)) return;
+
+      // workers: lightweight wrappers, not pages
+      if (targetInfo.type === 'worker' || targetInfo.type === 'service_worker' || targetInfo.type === 'shared_worker') {
+        const worker = {
+          type: targetInfo.type, url: targetInfo.url, sessionId, targetId: targetInfo.targetId,
+          browser: this,
+          close: () => this.conn.send('Target.closeTarget', { targetId: targetInfo.targetId }).catch(() => {}),
+        };
+        this.emit('worker', worker);
+        this.emit(targetInfo.type === 'service_worker' ? 'serviceworker' : 'worker', worker);
+        if (this.opts.serviceWorkers === 'block') {
+          await worker.close(); // hard-block service workers
+        }
+        return;
+      }
+
+      // only real documents become pages — Chrome also attaches browser_ui/tab/other
+      // chrome-internal targets (especially per browser context); those are not automatable pages
+      const PAGE_TYPES = new Set(['page', 'iframe', 'webview', 'app']);
+      if (!PAGE_TYPES.has(targetInfo.type)) {
+        this.emit('target', { type: targetInfo.type, url: targetInfo.url, targetId: targetInfo.targetId });
+        return;
+      }
+
       const evName = targetInfo.type === 'page' && targetInfo.openerId ? 'popup' : 'target';
       const page = new VeloxPage(this, sessionId, targetInfo);
       this._knownTargets.set(targetInfo.targetId, page);
-      this.pages.add(page);
+      this._pages.add(page);
+      // route the target into its browser context (if any)
+      const ctx = targetInfo.browserContextId ? this._contexts.get(targetInfo.browserContextId) : this.defaultContext();
+      if (ctx) {
+        page.context = ctx;
+        ctx._pages.add(page);
+        page.once('close', () => ctx._pages.delete(page));
+        ctx.emit(evName === 'popup' ? 'page' : 'backgroundpage', page);
+      }
       this.emit(evName, page);
       this.emit('targetCreated', page);
-      page.once('close', () => { this.pages.delete(page); this._knownTargets.delete(targetInfo.targetId); });
+      page.once('close', () => { this._pages.delete(page); this._knownTargets.delete(targetInfo.targetId); });
       // arm popups/OOPIFs in the background (domains + engine) so they're ready to use
-      page._init({}).catch(() => {});
+      page._init(ctx ? ctx.pageDefaults() : {}).catch(() => {});
     });
+  }
+
+  /** The implicit default context (no browserContextId) shared by bare newPage(). */
+  defaultContext() {
+    if (!this._defaultContext) {
+      this._defaultContext = new BrowserContext(this, null, this.opts.contextOpts || {});
+    }
+    return this._defaultContext;
+  }
+
+  /** Isolated context: separate cookies/storage/world. */
+  async newContext(opts = {}) {
+    const { browserContextId } = await this.conn.send('Target.createBrowserContext', {
+      disposeOnDetach: true,
+      ...(opts.proxy ? { proxyServer: opts.proxy.server } : {}),
+    });
+    const ctx = new BrowserContext(this, browserContextId, opts);
+    this._contexts.set(browserContextId, ctx);
+    if (opts.storageState) await ctx.setStorageState(opts.storageState);
+    if (opts.offline) await ctx.setOffline(true);
+    return ctx;
+  }
+
+  /** Internal: create + attach + init a page in a given context. */
+  async _createPage(opts = {}, browserContextId = null) {
+    const { targetId } = await this.conn.send('Target.createTarget', {
+      url: 'about:blank', ...(browserContextId ? { browserContextId } : {}),
+    });
+    // auto-attach can beat the createTarget response and already manage this
+    // target — reuse that page (its _init is idempotent) instead of double-attaching
+    const raced = this._knownTargets.get(targetId);
+    if (raced) {
+      await raced._init(opts);
+      return raced;
+    }
+    this._pendingAttaches.add(targetId);
+    let sessionId;
+    try {
+      ({ sessionId } = await this.conn.send('Target.attachToTarget', { targetId, flatten: true }));
+    } finally {
+      this._pendingAttaches.delete(targetId);
+    }
+    const page = new VeloxPage(this, sessionId, { targetId, type: 'page', url: 'about:blank' }, { browserContextId });
+    this._knownTargets.set(targetId, page);
+    this._pages.add(page);
+    page.once('close', () => { this._pages.delete(page); this._knownTargets.delete(targetId); });
+    await page._init(opts);
+    return page;
+  }
+
+  /** Launch with a persistent profile (extensions, logins survive restarts). */
+  static async launchPersistentContext(userDataDir, opts = {}) {
+    const b = await Browser.launch({ ...opts, userDataDir });
+    b._persistDir = userDataDir;       // keep the profile on close
+    const ctx = b.defaultContext();
+    ctx._opts = { ...ctx._opts, ...(opts.contextOpts || opts), baseURL: opts.baseURL };
+    // adopt any pages the profile auto-opened (e.g. restored tabs)
+    for (const p of b.pages()) {
+      p.context = ctx; ctx._pages.add(p);
+      p.once('close', () => ctx._pages.delete(p));
+      await p._init(ctx.pageDefaults()).catch(() => {});
+    }
+    return ctx;
   }
 
   /** Launch a local browser. Uses any installed Chromium-family binary. */
@@ -142,28 +241,17 @@ export class Browser extends Emitter {
     });
   }
 
-  /** New page. Everything optional: { stealth, ads, device, viewport, ua, locale, timezone, geolocation, headers, blockUrls, routes } */
+  /** New page in the default context. Everything optional: { stealth, ads, device, viewport, ua, locale, timezone, geolocation, headers, blockUrls, routes } */
   async newPage(opts = {}) {
-    const { browserContextId } = opts.isolated ? await this.conn.send('Target.createBrowserContext', { disposeOnDetach: true }) : {};
-    const { targetId } = await this.conn.send('Target.createTarget', {
-      url: 'about:blank', ...(browserContextId ? { browserContextId } : {}),
-    });
-    this._pendingAttaches.add(targetId);
-    let sessionId;
-    try {
-      ({ sessionId } = await this.conn.send('Target.attachToTarget', { targetId, flatten: true }));
-    } finally {
-      this._pendingAttaches.delete(targetId);
-    }
-    const page = new VeloxPage(this, sessionId, { targetId, type: 'page', url: 'about:blank' }, { browserContextId });
-    this._knownTargets.set(targetId, page);
-    this.pages.add(page);
-    page.once('close', () => { this.pages.delete(page); this._knownTargets.delete(targetId); });
-    await page._init(opts);
+    const ctx = this.defaultContext();
+    const page = await this._createPage(ctx.pageDefaults(opts), null);
+    page.context = ctx;
+    ctx._pages.add(page);
+    page.once('close', () => ctx._pages.delete(page));
     return page;
   }
 
-  pages() { return [...this.pages].filter((p) => !p.isClosed); }
+  pages() { return [...this._pages].filter((p) => !p.isClosed); }
 
   async contexts() { return (await this.conn.send('Target.getBrowserContexts')).browserContextIds; }
 
@@ -172,12 +260,19 @@ export class Browser extends Emitter {
     this._closed = true;
     try { await Promise.race([this.conn.send('Browser.close'), new Promise((r) => setTimeout(r, 3000))]); } catch {}
     this.conn.close();
-    try { this.proc?.kill('SIGKILL'); } catch {}
-    if (this._userDataDir) { try { rmSync(this._userDataDir, { recursive: true, force: true }); } catch {} }
+    // give the process a moment to exit gracefully (profile/cookie flush) before SIGKILL
+    if (this.proc) {
+      await new Promise((resolve) => {
+        const t = setTimeout(() => { try { this.proc.kill('SIGKILL'); } catch {} resolve(); }, 1500);
+        this.proc.once('exit', () => { clearTimeout(t); resolve(); });
+      });
+    }
+    if (this._userDataDir && !this._persistDir) { try { rmSync(this._userDataDir, { recursive: true, force: true }); } catch {} }
     this.emit('close');
   }
 }
 
 export const detect = discoverBrowsers;
 export const launch = (o) => Browser.launch(o);
+export const launchPersistentContext = (dir, o) => Browser.launchPersistentContext(dir, o);
 export const connect = (e, o) => Browser.connect(e, o);

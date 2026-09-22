@@ -67,4 +67,37 @@ console.log('pool results:', results);
 await pool.close();
 
 await b.close();
+// ── 11. playwright-parity surface ───────────────────────────────────────────
+const b2 = await velox.launch({ executablePath: EXE });
+const ctx = await b2.newContext({ baseURL: DEMO, bypassCSP: true });
+const p2 = await ctx.newPage();
+await p2.goto('/', { waitUntil: 'load' });
+
+// getBy* locators (in-page ARIA matching)
+const link = p2.getByRole('link', { name: 'More information' });
+console.log('getByRole link:', await link.attr('href'));
+
+// function-form evaluate + handles
+console.log('evaluate(fn):', await p2.evaluate((x) => x * 2, 21));
+const handle = await p2.elementHandle('h1');
+console.log('elementHandle text:', await handle.text());
+
+// APIRequestContext sharing the context jar
+const res = await ctx.request.get('/');
+console.log('context.request status:', res.status);
+
+// polling assertions
+await velox.expect(p2.getByRole('heading')).toHaveText('Example Domain');
+
+// video → animated GIF (from-scratch encoder)
+await p2.video.start({ path: 'examples/video.gif', width: 480 });
+await p2.mouse.move(200, 200);
+await p2.wait(300);
+console.log('video gif:', await p2.video.stop());
+
+// accessibility tree
+console.log('a11y yaml:\n' + (await p2.accessibility.yaml()));
+
+await ctx.close();
+await b2.close();
 console.log('\ntour complete ✦');

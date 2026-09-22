@@ -67,17 +67,48 @@ declare module 'velox' {
     text(): Promise<string | null>;
     attr(name: string): Promise<string | null>;
     html(): Promise<string | null>;
+    innerText(): Promise<string | null>;
+    innerHTML(): Promise<string | null>;
+    getAttribute(name: string): Promise<string | null>;
+    inputValue(): Promise<string | null>;
     count(): Promise<number>;
     exists(): Promise<boolean>;
     val(): Promise<string | null>;
     extract(spec?: { text?: boolean; html?: boolean; tag?: boolean; attrs?: string[]; limit?: number }): Promise<any[]>;
-    waitFor(opts?: { timeout?: number; state?: 'visible' | 'attached' | 'hidden' }): Promise<Locator>;
-    click(opts?: ClickOptions): Promise<VeloxPage>;
-    hover(opts?: { timeout?: number }): Promise<VeloxPage>;
+    allTextContents(): Promise<string[]>;
+    all(): Promise<Locator[]>;
+    waitFor(opts?: { state?: 'visible' | 'attached' | 'hidden'; timeout?: number }): Promise<Locator | null>;
+    first(): Locator;
+    last(): Locator;
+    nth(i: number): Locator;
+    filter(o: { hasText?: string; has?: string }): Locator;
+    locator(sel: string): Locator;
+    click(opts?: ClickOptions & { position?: { x: number; y: number }; force?: boolean; trial?: boolean }): Promise<VeloxPage>;
+    dblclick(opts?: any): Promise<VeloxPage>;
+    tap(opts?: any): Promise<VeloxPage>;
+    hover(opts?: any): Promise<VeloxPage>;
+    focus(): Promise<any>;
+    blur(): Promise<any>;
+    scrollIntoViewIfNeeded(o?: { timeout?: number }): Promise<any>;
     type(text: string, opts?: TypeOptions): Promise<VeloxPage>;
+    press(key: string, opts?: any): Promise<VeloxPage>;
     fill(value: string, opts?: { timeout?: number }): Promise<VeloxPage>;
+    setChecked(checked: boolean, opts?: any): Promise<VeloxPage>;
+    check(opts?: any): Promise<VeloxPage>;
+    uncheck(opts?: any): Promise<VeloxPage>;
+    selectOption(values: any, opts?: any): Promise<string[]>;
+    selectText(opts?: any): Promise<any>;
+    dragTo(target: string | Locator, opts?: any): Promise<VeloxPage>;
+    isChecked(): Promise<boolean>;
+    isDisabled(): Promise<boolean>;
+    isEditable(): Promise<boolean>;
+    isVisible(): Promise<boolean>;
+    isHidden(): Promise<boolean>;
+    boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null>;
+    ariaSnapshot(): Promise<string>;
     screenshot(opts?: ScreenshotOptions): Promise<Buffer>;
-    scrollIntoView(): Promise<{ x: number; y: number } | null>;
+    elementHandle(): Promise<ElementHandle>;
+    evaluate(fn: (el: any, arg?: any) => any, arg?: any): Promise<any>;
   }
 
   export interface GotoOptions { waitUntil?: 'none' | 'interactive' | 'load' | 'networkidle' | 'settle'; timeout?: number; referer?: string; }
@@ -162,6 +193,44 @@ declare module 'velox' {
   export interface VeloxPage extends Session {
     readonly browser: Browser;
     readonly targetId: string;
+    context: BrowserContext | null;
+    clock: { install(o?: { time?: string | number | Date }): Promise<any>; setFixedTime(t: string | number | Date): Promise<any>; advance(ms: number): Promise<any>; fastForward(ms: number): Promise<any>; resume(): Promise<any>; };
+    video: { start(o?: { path?: string; dir?: string; width?: number; maxFrames?: number }): Promise<any>; stop(): Promise<any | null>; recorder: any };
+    coverage: { startJSCoverage(): Promise<void>; stopJSCoverage(): Promise<any[]>; startCSSCoverage(): Promise<void>; stopCSSCoverage(): Promise<any[]> };
+    accessibility: { snapshot(o?: { interestingOnly?: boolean }): Promise<any>; yaml(): Promise<string> };
+    locator(sel: string): Locator;
+    getByRole(role: string, o?: { name?: string; exact?: boolean }): Locator;
+    getByText(text: string, o?: { exact?: boolean }): Locator;
+    getByLabel(text: string, o?: { exact?: boolean }): Locator;
+    getByPlaceholder(text: string, o?: { exact?: boolean }): Locator;
+    getByAltText(text: string, o?: { exact?: boolean }): Locator;
+    getByTitle(text: string, o?: { exact?: boolean }): Locator;
+    getByTestId(id: string): Locator;
+    $eval(sel: string, fn: (el: any, arg?: any) => any, arg?: any): Promise<any>;
+    $$eval(sel: string, fn: (els: any[], arg?: any) => any, arg?: any): Promise<any>;
+    evaluateHandle(jsOrFn: any, arg?: any): Promise<JSHandle>;
+    elementHandle(sel: string): Promise<ElementHandle>;
+    elementHandles(sel: string): Promise<ElementHandle[]>;
+    waitForEvent(name: string, o?: { predicate?: (p: any) => boolean; timeout?: number }): Promise<any>;
+    waitForRequest(match: string | RegExp | ((url: string) => boolean), o?: { timeout?: number }): Promise<RequestEntry>;
+    waitForResponse(match: string | RegExp | ((url: string) => boolean), o?: { timeout?: number }): Promise<RequestEntry>;
+    waitForRequestFinished(match: any, o?: { timeout?: number }): Promise<RequestEntry>;
+    waitForDialog(timeout?: number): Promise<any>;
+    waitForPopup(timeout?: number): Promise<VeloxPage>;
+    waitForDownload(timeout?: number): Promise<Download>;
+    setOffline(offline?: boolean): Promise<VeloxPage>;
+    emulateNetwork(o?: { offline?: boolean; latency?: number; downloadThroughput?: number; uploadThroughput?: number }): Promise<VeloxPage>;
+    addInitScript(fnOrSrc: any): Promise<string>;
+    removeInitScript(identifier?: string): Promise<boolean>;
+    addScriptTag(o: { url?: string; content?: string; path?: string }): Promise<any>;
+    addStyleTag(o: { url?: string; content?: string; path?: string }): Promise<any>;
+    dragAndDrop(source: string, target: string, o?: { steps?: number }): Promise<VeloxPage>;
+    emulateMedia(o?: { media?: string; colorScheme?: string; reducedMotion?: string }): Promise<VeloxPage>;
+    setViewportSize(size: { width: number; height: number }): Promise<VeloxPage>;
+    bringToFront(): Promise<VeloxPage>;
+    createCDPSession(): any;
+    frames(): Promise<any[]>;
+    frameLocator(sel: string): any;
     goto(url: string, opts?: GotoOptions): Promise<{ url: string; status: number | null; ms: number }>;
     reload(opts?: GotoOptions): Promise<VeloxPage>;
     back(): Promise<boolean>;
@@ -229,10 +298,95 @@ declare module 'velox' {
     conn: any;
     pages(): VeloxPage[];
     newPage(opts?: PageOptions): Promise<VeloxPage>;
+    newContext(opts?: ContextOptions): Promise<BrowserContext>;
+    defaultContext(): BrowserContext;
     close(): Promise<void>;
     on(event: string, handler: (...args: any[]) => void): () => void;
+    waitForEvent(event: string, opts?: { predicate?: (p: any) => boolean; timeout?: number }): Promise<any>;
     versionInfo?: any;
     closed: boolean;
+  }
+
+  export interface ContextOptions extends PageOptions {
+    baseURL?: string;
+    storageState?: string | { cookies: CookieEntry[]; origins: { origin: string; localStorage: { name: string; value: string }[] }[] };
+    httpCredentials?: { username: string; password: string };
+    serviceWorkers?: 'allow' | 'block';
+    bypassCSP?: boolean;
+    offline?: boolean;
+    testIdAttribute?: string;
+    recordVideo?: { dir: string };
+    contextOpts?: Record<string, any>;
+  }
+
+  export interface BrowserContext {
+    browser: Browser;
+    pages(): VeloxPage[];
+    newPage(opts?: PageOptions): Promise<VeloxPage>;
+    route(pattern: string | RegExp, handler: (req: RouteRequest) => void): BrowserContext;
+    unroute(pattern: string | RegExp): BrowserContext;
+    addInitScript(fnOrSrc: any): BrowserContext;
+    expose(name: string, fn: (...args: any[]) => any): Promise<void>;
+    exposeBinding(name: string, fn: (...args: any[]) => any): Promise<void>;
+    setExtraHTTPHeaders(headers: Record<string, string>): Promise<BrowserContext>;
+    cookies(urls?: string[]): Promise<CookieEntry[]>;
+    setCookies(cookies: CookieEntry[]): Promise<BrowserContext>;
+    clearCookies(): Promise<BrowserContext>;
+    storageState(path?: string): Promise<any>;
+    setStorageState(stateOrPath: any): Promise<BrowserContext>;
+    grantPermissions(perms: string[], o?: { origin?: string }): Promise<BrowserContext>;
+    clearPermissions(): Promise<BrowserContext>;
+    setOffline(offline?: boolean): Promise<BrowserContext>;
+    setGeolocation(g: { latitude: number; longitude: number; accuracy?: number }): Promise<BrowserContext>;
+    setColorScheme(s: string): Promise<BrowserContext>;
+    newCDPSession(page: VeloxPage): Promise<any>;
+    request: { fetch(url: any, o?: any): Promise<any>; get(u: any, o?: any): Promise<any>; post(u: any, o?: any): Promise<any>; put(u: any, o?: any): Promise<any>; patch(u: any, o?: any): Promise<any>; delete(u: any, o?: any): Promise<any>; head(u: any, o?: any): Promise<any> };
+    startTracing(o?: { screenshots?: boolean; categories?: string[] }): Promise<BrowserContext>;
+    stopTracing(path?: string): Promise<any>;
+    close(): Promise<void>;
+    on(event: string, handler: (...args: any[]) => void): () => void;
+  }
+
+  export interface JSHandle {
+    evaluate(fn: (el: any, arg?: any) => any, arg?: any): Promise<any>;
+    jsonValue(): Promise<any>;
+    getProperties(): Promise<Record<string, any>>;
+    getProperty(name: string): Promise<any>;
+    dispose(): Promise<void>;
+    toString(): string;
+  }
+  export interface ElementHandle extends JSHandle {
+    click(o?: any): Promise<VeloxPage>;
+    point(): Promise<{ x: number; y: number } | null>;
+    boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null>;
+    text(): Promise<string | null>;
+    attr(name: string): Promise<string | null>;
+    html(): Promise<string | null>;
+    fill(value: string): Promise<boolean>;
+    type(text: string, o?: { delay?: number }): Promise<VeloxPage>;
+    press(key: string): Promise<VeloxPage>;
+    focus(): Promise<any>;
+    scrollIntoView(): Promise<any>;
+    $(sel: string): Promise<ElementHandle | null>;
+    $$(sel: string): Promise<ElementHandle[]>;
+    screenshot(o?: any): Promise<Buffer>;
+  }
+  export interface Download {
+    url: string;
+    suggestedFilename: string;
+    state: string;
+    filename: string;
+    finished(timeout?: number): Promise<Download>;
+    path(): string | null;
+    saveAs(target: string): Promise<string>;
+    cancel(): Promise<void>;
+  }
+  export interface WebSocketTracker {
+    url: string;
+    framesSent: { text: string; opcode: number; timestamp: number }[];
+    framesReceived: { text: string; opcode: number; timestamp: number }[];
+    isClosed: boolean;
+    on(event: string, handler: (...args: any[]) => void): () => void;
   }
 
   export class Pool {
@@ -271,6 +425,7 @@ declare module 'velox' {
     scrape(url: string, opts?: OpenOptions & { recipe?: 'text' | 'links' | 'images' | 'tables' | 'meta' | 'jsonld' | 'all' }): Promise<any>;
     fetch(url: string, opts?: VeloxFetchOptions): Promise<LiteResponse>;
     launch(opts?: LaunchOptions): Promise<Browser>;
+    launchPersistentContext(userDataDir: string, opts?: LaunchOptions & { contextOpts?: Record<string, any> }): Promise<BrowserContext>;
     connect(endpoint: string, opts?: any): Promise<Browser>;
     detect(): { path: string; name: string }[];
     Pool: typeof Pool;
@@ -278,8 +433,15 @@ declare module 'velox' {
     parseHtml(html: string): HtmlDoc;
     needsJS(res: LiteResponse): boolean;
     CookieJar: typeof CookieJar;
+    expect(target: any, opts?: any): any;
     Browser: any;
+    BrowserContext: any;
     VeloxPage: any;
+    Locator: any;
+    JSHandle: any;
+    ElementHandle: any;
+    Download: any;
+    WebSocketTracker: any;
     version: string;
   };
 
