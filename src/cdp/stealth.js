@@ -1,132 +1,485 @@
-// velox :: cdp/stealth.js — anti-fingerprint patches, injected before page scripts.
-// Pure from-scratch implementation (no code from puppeteer-extra/stealth).
-import { compactSource } from '../util.js';
-export const STEALTH_SOURCE_RAW = String.raw`
-(function () {
-  if (window.__vlxStealth) return; window.__vlxStealth = true;
-  var def = function (obj, prop, value) {
-    try { Object.defineProperty(obj, prop, { get: value.get ? value.get : function () { return value; }, configurable: true, enumerable: true }); } catch (e) {}
+// velox :: cdp/stealth.js — fingerprint hardening, profile-driven so every value is
+// mutually coherent (platform ↔ UA-CH ↔ WebGL ↔ screen ↔ fonts ↔ locale ↔ timezone).
+// Detectors score incoherence far more than they score individual values.
+//
+//   newPage({ stealth: true })                          // coherent default profile
+//   newPage({ stealth: { profile: 'chrome-windows' } })  // pretend to be Windows Chrome
+//   newPage({ stealth: { noise: false } })               // patches without canvas/audio noise
+//   newPage({ stealth: { geo: 'de-DE' } })               // locale+tz+Accept-Language together
+
+export const PROFILES = {
+  'chrome-linux': {
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    userAgentMetadata: { brands: [{brand:'Chromium',version:'128'},{brand:'Google Chrome',version:'128'},{brand:'Not)A;Brand',version:'24'}], fullVersion: '128.0.0.0', platform: 'Linux', platformVersion: '6.6.0', architecture: 'x86', bitness: '64', model: '', mobile: false },
+    platform: 'Linux x86_64',
+    uaPlatform: 'Linux', uaPlatformVersion: '6.6.0',
+    vendor: 'Google Inc.',
+    webglVendor: 'Google Inc.',
+    webglRenderer: 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    hardwareConcurrency: 8, deviceMemory: 8,
+    screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24, pixelDepth: 24 },
+    languages: ['en-US', 'en'], locale: 'en-US', timezone: 'America/New_York',
+    maxTouchPoints: 0,
+    fonts: ['Arial', 'DejaVu Sans', 'Liberation Sans', 'Noto Sans', 'Ubuntu', 'Cantarell'],
+  },
+  'chrome-windows': {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    userAgentMetadata: { brands: [{brand:'Chromium',version:'128'},{brand:'Google Chrome',version:'128'},{brand:'Not)A;Brand',version:'24'}], fullVersion: '128.0.0.0', platform: 'Windows', platformVersion: '15.0.0', architecture: 'x86', bitness: '64', model: '', mobile: false },
+    platform: 'Win32',
+    uaPlatform: 'Windows', uaPlatformVersion: '15.0.0',
+    vendor: 'Google Inc.',
+    webglVendor: 'Google Inc.',
+    webglRenderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    hardwareConcurrency: 12, deviceMemory: 8,
+    screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1032, colorDepth: 24, pixelDepth: 24 },
+    languages: ['en-US', 'en'], locale: 'en-US', timezone: 'America/Chicago',
+    maxTouchPoints: 0,
+    fonts: ['Arial', 'Calibri', 'Segoe UI', 'Tahoma', 'Times New Roman', 'Verdana'],
+  },
+  'chrome-mac': {
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    userAgentMetadata: { brands: [{brand:'Chromium',version:'128'},{brand:'Google Chrome',version:'128'},{brand:'Not)A;Brand',version:'24'}], fullVersion: '128.0.0.0', platform: 'macOS', platformVersion: '14.5.0', architecture: 'arm', bitness: '64', model: '', mobile: false },
+    platform: 'MacIntel',
+    uaPlatform: 'macOS', uaPlatformVersion: '14.5.0',
+    vendor: 'Google Inc.',
+    webglVendor: 'Google Inc.',
+    webglRenderer: 'ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)',
+    hardwareConcurrency: 10, deviceMemory: 8,
+    screen: { width: 1512, height: 982, availWidth: 1512, availHeight: 944, colorDepth: 30, pixelDepth: 30 },
+    languages: ['en-US', 'en'], locale: 'en-US', timezone: 'America/Los_Angeles',
+    maxTouchPoints: 0,
+    fonts: ['Helvetica', 'Helvetica Neue', 'Menlo', 'Monaco', 'SF Pro Text', 'Arial'],
+  },
+  'chrome-android': {
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36',
+    userAgentMetadata: { brands: [{brand:'Chromium',version:'128'},{brand:'Google Chrome',version:'128'},{brand:'Not)A;Brand',version:'24'}], fullVersion: '128.0.0.0', platform: 'Android', platformVersion: '14.0.0', architecture: '', bitness: '', model: 'Pixel 8', mobile: true },
+    platform: 'Linux armv8l',
+    uaPlatform: 'Android', uaPlatformVersion: '14.0.0',
+    vendor: 'Google Inc.',
+    webglVendor: 'Qualcomm',
+    webglRenderer: 'Adreno (TM) 740',
+    hardwareConcurrency: 8, deviceMemory: 4,
+    screen: { width: 412, height: 915, availWidth: 412, availHeight: 915, colorDepth: 24, pixelDepth: 24 },
+    languages: ['en-US', 'en'], locale: 'en-US', timezone: 'America/New_York',
+    maxTouchPoints: 5, mobile: true,
+    fonts: ['Roboto', 'Noto Sans', 'Droid Sans'],
+  },
+};
+
+// locale → coherent timezone / Accept-Language, so `geo` can't contradict itself
+export const GEO = {
+  'en-US': { tz: 'America/New_York', acceptLanguage: 'en-US,en;q=0.9' },
+  'en-GB': { tz: 'Europe/London', acceptLanguage: 'en-GB,en;q=0.9' },
+  'de-DE': { tz: 'Europe/Berlin', acceptLanguage: 'de-DE,de;q=0.9,en;q=0.8' },
+  'fr-FR': { tz: 'Europe/Paris', acceptLanguage: 'fr-FR,fr;q=0.9,en;q=0.8' },
+  'es-ES': { tz: 'Europe/Madrid', acceptLanguage: 'es-ES,es;q=0.9,en;q=0.8' },
+  'pt-BR': { tz: 'America/Sao_Paulo', acceptLanguage: 'pt-BR,pt;q=0.9,en;q=0.8' },
+  'ja-JP': { tz: 'Asia/Tokyo', acceptLanguage: 'ja-JP,ja;q=0.9,en;q=0.8' },
+  'ko-KR': { tz: 'Asia/Seoul', acceptLanguage: 'ko-KR,ko;q=0.9,en;q=0.8' },
+  'zh-CN': { tz: 'Asia/Shanghai', acceptLanguage: 'zh-CN,zh;q=0.9,en;q=0.8' },
+  'ru-RU': { tz: 'Europe/Moscow', acceptLanguage: 'ru-RU,ru;q=0.9,en;q=0.8' },
+  'nl-NL': { tz: 'Europe/Amsterdam', acceptLanguage: 'nl-NL,nl;q=0.9,en;q=0.8' },
+  'it-IT': { tz: 'Europe/Rome', acceptLanguage: 'it-IT,it;q=0.9,en;q=0.8' },
+  'pl-PL': { tz: 'Europe/Warsaw', acceptLanguage: 'pl-PL,pl;q=0.9,en;q=0.8' },
+  'tr-TR': { tz: 'Europe/Istanbul', acceptLanguage: 'tr-TR,tr;q=0.9,en;q=0.8' },
+  'id-ID': { tz: 'Asia/Jakarta', acceptLanguage: 'id-ID,id;q=0.9,en;q=0.8' },
+};
+
+/** Resolve a stealth option object into a concrete, coherent profile. */
+export function resolveStealth(opt) {
+  if (!opt) return null;
+  const o = opt === true ? {} : opt;
+  const profile = PROFILES[o.profile] || PROFILES[o.profile === undefined ? 'chrome-linux' : o.profile];
+  if (!profile) throw new Error(`unknown stealth profile "${o.profile}" — try: ${Object.keys(PROFILES).join(', ')}`);
+  const geo = o.geo ? GEO[o.geo] : null;
+  if (o.geo && !geo) throw new Error(`unknown geo "${o.geo}" — try: ${Object.keys(GEO).join(', ')}`);
+  return {
+    profile: o.profile || 'chrome-linux',
+    values: profile,
+    userAgent: o.userAgent || profile.userAgent,
+    userAgentMetadata: profile.userAgentMetadata,
+    locale: o.locale || geo?.locale || (o.geo ? o.geo : profile.locale),
+    timezone: o.timezone || geo?.tz || profile.timezone,
+    acceptLanguage: o.acceptLanguage || geo?.acceptLanguage,
+    languages: o.geo ? [o.geo, (o.geo.split('-')[0]), 'en'] : profile.languages,
+    noise: o.noise !== false,
+    seed: Number.isFinite(o.seed) ? o.seed : 1337,
+    webrtc: o.webrtc ?? 'default',          // 'default' | 'block'
+    mediaDevices: o.mediaDevices !== false,
+    hideEngine: o.hideEngine !== false,
+  };
+}
+
+/**
+ * Build the injected stealth source for a resolved profile.
+ * Deterministic: the same seed always produces the same noise, so two reads of the
+ * same canvas agree — which is exactly what canvas-fingerprint detectors check.
+ */
+export function buildStealthSource(resolved) {
+  const r = resolved;
+  const v = r.values;
+  return String.raw`(function () {
+  if (window.__vlxStealth) return;
+  try { Object.defineProperty(window, '__vlxStealth', { value: 1, enumerable: false, configurable: true }); } catch (e) { window.__vlxStealth = 1; }
+  var R = ${JSON.stringify({
+    profile: r.profile,
+    platform: v.platform, uaPlatform: v.uaPlatform, uaPlatformVersion: v.uaPlatformVersion,
+    vendor: v.vendor, webglVendor: v.webglVendor, webglRenderer: v.webglRenderer,
+    hardwareConcurrency: v.hardwareConcurrency, deviceMemory: v.deviceMemory,
+    screen: v.screen, languages: r.languages, locale: r.locale, timezone: r.timezone,
+    maxTouchPoints: v.maxTouchPoints || 0, mobile: !!v.mobile,
+    noise: r.noise, seed: r.seed, webrtc: r.webrtc, mediaDevices: r.mediaDevices,
+    uaMetadata: r.userAgentMetadata,
+  })};
+
+  var def = function (obj, prop, value, enumerable) {
+    try { Object.defineProperty(obj, prop, { get: typeof value === 'function' && value.__getter ? value.fn : function () { return value; }, configurable: true, enumerable: !!enumerable }); } catch (e) {}
+  };
+  var getter = function (fn) { var f = function () { return fn(); }; f.__getter = true; f.fn = fn; return f; };
+
+  // ── native-looking functions ───────────────────────────────────────────────
+  // patched builtins must still report [native code] or the patch itself is the tell
+  var nativeToString = Function.prototype.toString;
+  var patched = new WeakMap();
+  var fakeNative = function (name) { return 'function ' + name + '() { [native code] }'; };
+  var toStringProxy = function () {
+    var fn = this;
+    if (patched.has(fn)) return patched.get(fn);
+    var s = nativeToString.call(fn);
+    if (/__vlx|vlxStealth|playwright|puppeteer|cdp|selenium|webdriver/i.test(s)) return fakeNative(fn.name || '');
+    return s;
+  };
+  try {
+    Object.defineProperty(Function.prototype, 'toString', { value: toStringProxy, writable: true, configurable: true, enumerable: false });
+    patched.set(Function.prototype.toString, fakeNative('toString'));
+  } catch (e) {}
+  var markNative = function (fn, name) { patched.set(fn, fakeNative(name || fn.name || '')); return fn; };
+  var patch = function (holder, prop, impl, name) {
+    try {
+      var orig = holder[prop];
+      holder[prop] = markNative(impl, name || prop);
+      if (orig && orig.__orig) {} else { try { holder[prop].__orig = orig; } catch (e) {} }
+    } catch (e) {}
   };
 
-  // 1. navigator.webdriver
-  def(navigator, 'webdriver', { get: function () { return undefined; } });
+  // ── seeded noise (deterministic per seed+input) ────────────────────────────
+  var rand = (function (seed) {
+    var s = (seed || 1) >>> 0;
+    return function () { s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  })(R.seed);
+  var hash = function (str) { var h = 2166136261; for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
+  var noiseAt = function (key) {
+    // stable pseudo-noise: same input → same output, so repeated reads agree
+    var s = (R.seed >>> 0) ^ Math.imul(Math.floor(hash(key) * 4294967296), 2654435761);
+    s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
 
-  // 2. languages
-  def(navigator, 'languages', ['en-US', 'en']);
-  def(navigator, 'language', 'en-US');
+  // ── 1. navigator core ─────────────────────────────────────────────────────
+  def(navigator, 'webdriver', undefined);
+  def(navigator, 'platform', R.platform);
+  def(navigator, 'vendor', ${JSON.stringify(v.vendor)});
+  def(navigator, 'language', R.languages[0]);
+  def(navigator, 'languages', R.languages.slice());
+  def(navigator, 'hardwareConcurrency', R.hardwareConcurrency);
+  try { def(navigator, 'deviceMemory', R.deviceMemory); } catch (e) {}
+  def(navigator, 'maxTouchPoints', R.maxTouchPoints);
+  try { def(navigator, 'oscpu', undefined); } catch (e) {}
+  try { def(navigator, 'doNotTrack', null); } catch (e) {}
 
-  // 3. plugins — a realistic Chromium PDF set
+  // ── 2. plugins / mimeTypes with a correct prototype chain ─────────────────
   try {
-    var mkPlugin = function (name, desc, fn, mime) {
+    var mime = function (type, suffixes, desc) { var m = Object.create(MimeType.prototype); m.type = type; m.suffixes = suffixes; m.description = desc; def(m, 'enabledPlugin', null); return m; };
+    var plugin = function (name, desc, fn) {
       var p = Object.create(Plugin.prototype);
-      Object.defineProperties(p, { name: { value: name }, description: { value: desc }, filename: { value: fn }, length: { value: 1 } });
-      var f = { name: mime, description: mime, suffixes: 'pdf', type: mime };
-      p[0] = f; p[mime] = f;
+      def(p, 'name', name); def(p, 'description', desc); def(p, 'filename', fn); def(p, 'length', 1);
+      var m = mime('application/x-google-chrome-pdf', 'pdf', 'Portable Document Format');
+      p[0] = m; p['application/x-google-chrome-pdf'] = m;
       return p;
     };
-    var arr = [
-      mkPlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
-      mkPlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
-      mkPlugin('Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
-      mkPlugin('Microsoft Edge PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
-      mkPlugin('WebKit built-in PDF', 'Portable Document Format', 'internal-pdf-viewer', 'application/x-google-chrome-pdf'),
+    var list = [
+      plugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+      plugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+      plugin('Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+      plugin('Microsoft Edge PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer'),
+      plugin('WebKit built-in PDF', 'Portable Document Format', 'internal-pdf-viewer'),
     ];
-    var fake = Object.create(PluginArray.prototype);
-    arr.forEach(function (p, i) { fake[i] = p; fake[p.name] = p; });
-    Object.defineProperty(fake, 'length', { value: arr.length });
-    Object.defineProperty(fake, 'item', { value: function (i) { return arr[i]; } });
-    Object.defineProperty(fake, 'namedItem', { value: function (n) { return arr.find(function (p) { return p.name === n; }) || null; } });
-    Object.defineProperty(fake, 'refresh', { value: function () {} });
-    def(navigator, 'plugins', fake);
-    def(navigator, 'mimeTypes', (function () {
-      var m = Object.create(MimeTypeArray.prototype);
-      var mt = { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: arr[0] };
-      m[0] = mt; m['application/pdf'] = mt;
-      Object.defineProperty(m, 'length', { value: 1 });
-      return m;
-    })());
+    var arr = Object.create(PluginArray.prototype);
+    list.forEach(function (p, i) { arr[i] = p; arr[p.name] = p; });
+    def(arr, 'length', list.length);
+    patch(arr, 'item', function (i) { return list[i] || null; }, 'item');
+    patch(arr, 'namedItem', function (n) { for (var i = 0; i < list.length; i++) if (list[i].name === n) return list[i]; return null; }, 'namedItem');
+    patch(arr, 'refresh', function () {}, 'refresh');
+    def(navigator, 'plugins', arr);
+    var marr = Object.create(MimeTypeArray.prototype);
+    var mt = mime('application/pdf', 'pdf', 'Portable Document Format');
+    def(mt, 'enabledPlugin', list[0]);
+    marr[0] = mt; marr['application/pdf'] = mt;
+    def(marr, 'length', 1);
+    patch(marr, 'item', function (i) { return i === 0 ? mt : null; }, 'item');
+    patch(marr, 'namedItem', function (n) { return n === 'application/pdf' ? mt : null; }, 'namedItem');
+    def(navigator, 'mimeTypes', marr);
   } catch (e) {}
 
-  // 4. window.chrome runtime object
+  // ── 3. window.chrome (present on every real Chrome page) ──────────────────
   try {
     if (!window.chrome) window.chrome = {};
-    if (!window.chrome.runtime) {
-      window.chrome.runtime = {
-        OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', OTHER: 'other' },
+    var c = window.chrome;
+    if (!c.runtime) {
+      c.runtime = {
+        OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', OTHER: 'other', SHARED_MODULE_UPDATE: 'shared_module_update' },
         OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
         PlatformArch: { ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
-        connect: function () {}, sendMessage: function () {},
+        PlatformNaclArch: { ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
+        PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
+        RequestUpdateCheckStatus: { NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' },
+        connect: markNative(function () { return { onDisconnect: { addListener: function () {} }, onMessage: { addListener: function () {} }, postMessage: function () {}, disconnect: function () {} }; }, 'connect'),
+        sendMessage: markNative(function () {}, 'sendMessage'),
       };
     }
-    if (!window.chrome.app) window.chrome.app = { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
-    if (!window.chrome.csi) window.chrome.csi = function () { return { startE: Date.now() - 1000, onloadT: Date.now() - 500, pageT: 500, tran: 15 }; };
-    if (!window.chrome.loadTimes) window.chrome.loadTimes = function () { return { commitLoadTime: Date.now() / 1000 - 1, connectionInfo: 'h2', finishDocumentLoadTime: Date.now() / 1000 - 0.5, finishLoadTime: Date.now() / 1000 - 0.4, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now() / 1000 - 0.8, navigationType: 'Other', npnNegotiatedProtocol: 'unknown', requestTime: Date.now() / 1000 - 1.2, startLoadTime: Date.now() / 1000 - 1.1, wasAlternateProtocolAvailable: false, wasFpProtocolUsed: false, wasNpnNegotiated: true }; };
+    if (!c.app) c.app = { isInstalled: false, InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }, RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' } };
+    if (!c.csi) c.csi = markNative(function () { return { startE: Date.now() - 3000, onloadT: Date.now() - 800, pageT: 2200, tran: 15 }; }, 'csi');
+    if (!c.loadTimes) c.loadTimes = markNative(function () { return { commitLoadTime: Date.now() / 1000 - 2.1, connectionInfo: 'h2', finishDocumentLoadTime: Date.now() / 1000 - 1.4, finishLoadTime: Date.now() / 1000 - 1.2, firstPaintAfterLoadTime: 0, firstPaintTime: Date.now() / 1000 - 1.9, navigationType: 'Other', npnNegotiatedProtocol: 'h2', requestTime: Date.now() / 1000 - 2.4, startLoadTime: Date.now() / 1000 - 2.35, wasAlternateProtocolAvailable: false, wasFpProtocolUsed: false, wasNpnNegotiated: true }; }, 'loadTimes');
   } catch (e) {}
 
-  // 5. permissions — Notification.query should not throw / reveal automation
+  // ── 4. permissions: Notification must agree with Notification.permission ──
   try {
-    var orig = window.Notification;
-    if (orig) def(orig, 'permission', 'default');
+    if (window.Notification) def(window.Notification, 'permission', 'default');
     if (navigator.permissions && navigator.permissions.query) {
-      var qp = navigator.permissions.query.bind(navigator.permissions);
-      navigator.permissions.query = function (p) {
-        if (p && p.name === 'notifications') {
-          return Promise.resolve({ state: Notification.permission || 'default', onchange: null });
+      var pq = navigator.permissions.query.bind(navigator.permissions);
+      patch(navigator.permissions, 'query', function (p) {
+        try {
+          if (p && p.name === 'notifications') return Promise.resolve({ state: (window.Notification && Notification.permission) || 'default', onchange: null });
+        } catch (e) {}
+        return pq(p);
+      }, 'query');
+    }
+  } catch (e) {}
+
+  // ── 5. WebGL vendor/renderer + extension consistency ─────────────────────
+  try {
+    var patchGL = function (proto) {
+      if (!proto) return;
+      var gp = proto.getParameter;
+      patch(proto, 'getParameter', function (p) {
+        if (p === 37445) return R.webglVendor;         // UNMASKED_VENDOR_WEBGL
+        if (p === 37446) return R.webglRenderer;       // UNMASKED_RENDERER_WEBGL
+        if (p === 7936) return R.webglVendor;          // VENDOR
+        if (p === 7937) return R.webglRenderer;        // RENDERER
+        return gp.apply(this, arguments);
+      }, 'getParameter');
+      var ge = proto.getExtension;
+      patch(proto, 'getExtension', function (name) {
+        var ext = ge.apply(this, arguments);
+        if (!ext) return ext;
+        if (name === 'WEBGL_debug_renderer_info' && typeof ext === 'object') {
+          try { def(ext, 'UNMASKED_VENDOR_WEBGL', 37445); def(ext, 'UNMASKED_RENDERER_WEBGL', 37446); } catch (e) {}
         }
-        return qp(p);
+        return ext;
+      }, 'getExtension');
+    };
+    if (window.WebGLRenderingContext) patchGL(WebGLRenderingContext.prototype);
+    if (window.WebGL2RenderingContext) patchGL(WebGL2RenderingContext.prototype);
+  } catch (e) {}
+
+  // ── 6. canvas fingerprint noise: stable per input, so repeat reads match ──
+  if (R.noise) {
+    try {
+      var perturb = function (data, key) {
+        // ~1 pixel in 6 gets a 1-LSB nudge in one channel: invisible, but unique per
+        // seed and perfectly deterministic for the same input
+        for (var i = 0; i < data.length; i += 4) {
+          var n = noiseAt(key + ':' + (i % 7919));
+          if (n < 0.16) data[i] = data[i] ^ 1;
+          else if (n < 0.32) data[i + 1] = data[i + 1] ^ 1;
+          else if (n < 0.48) data[i + 2] = data[i + 2] ^ 1;
+        }
+        return data;
       };
+      var fpCache = new WeakMap();
+      var gid = CanvasRenderingContext2D.prototype.getImageData;
+      patch(CanvasRenderingContext2D.prototype, 'getImageData', function (x, y, w, h) {
+        var d = gid.apply(this, arguments);
+        try { perturb(d.data, 'gid:' + w + 'x' + h + ':' + x + ':' + y); } catch (e) {}
+        return d;
+      }, 'getImageData');
+      var tdu = HTMLCanvasElement.prototype.toDataURL;
+      patch(HTMLCanvasElement.prototype, 'toDataURL', function () {
+        // cache per canvas: detectors read twice and compare — a mutating patch would
+        // make the two reads differ, which is exactly what they look for
+        var cached = fpCache.get(this);
+        if (cached) return cached;
+        var out = tdu.apply(this, arguments);
+        var ctx = this.getContext('2d');
+        try {
+          if (ctx && this.width * this.height <= 4e6) {
+            var d = gid.call(ctx, 0, 0, this.width, this.height);
+            perturb(d.data, 'tdu:' + this.width + 'x' + this.height + (arguments[0] || ''));
+            ctx.putImageData(d, 0, 0);
+            out = tdu.apply(this, arguments);
+          }
+        } catch (e) {}
+        fpCache.set(this, out);
+        return out;
+      }, 'toDataURL');
+      var tb = HTMLCanvasElement.prototype.toBlob;
+      if (tb) patch(HTMLCanvasElement.prototype, 'toBlob', function (cb, type, q) {
+        var cached = fpCache.get(this);
+        if (cached) { try { cb(new Blob([cached])); return; } catch (e) {} }
+        var args = [function (blob) { try { fpCache.set(this, blob); } catch (e) {} if (cb) cb(blob); }.bind(this), type, q];
+        var ctx = this.getContext('2d');
+        try {
+          if (ctx && this.width * this.height <= 4e6) {
+            var d = gid.call(ctx, 0, 0, this.width, this.height);
+            perturb(d.data, 'tb:' + this.width + 'x' + this.height);
+            ctx.putImageData(d, 0, 0);
+          }
+        } catch (e) {}
+        return tb.apply(this, args);
+      }, 'toBlob');
+    } catch (e) {}
+    // audio fingerprint noise
+    try {
+      if (window.AnalyserNode) {
+        var gffd = AnalyserNode.prototype.getFloatFrequencyData;
+        patch(AnalyserNode.prototype, 'getFloatFrequencyData', function (arr) {
+          gffd.apply(this, arguments);
+          try { for (var i = 0; i < arr.length; i += 16) arr[i] = arr[i] + (noiseAt('audio:' + i) - 0.5) * 1e-4; } catch (e) {}
+        }, 'getFloatFrequencyData');
+      }
+      if (window.AudioBuffer) {
+        var gcd = AudioBuffer.prototype.getChannelData;
+        patch(AudioBuffer.prototype, 'getChannelData', function (ch) {
+          var d = gcd.apply(this, arguments);
+          try { for (var i = 0; i < d.length; i += 128) d[i] = d[i] + (noiseAt('pcm:' + ch + ':' + i) - 0.5) * 1e-7; } catch (e) {}
+          return d;
+        }, 'getChannelData');
+      }
+    } catch (e) {}
+  }
+
+  // ── 7. iframe contentWindow keeps our chrome object ───────────────────────
+  try {
+    var getCW = HTMLIFrameElement.prototype.__lookupGetter__('contentWindow');
+    if (getCW) Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
+      get: markNative(function () { var w = getCW.apply(this, arguments); if (w) { try { if (!w.chrome) w.chrome = window.chrome; } catch (e) {} } return w; }, 'get contentWindow'),
+      configurable: true,
+    });
+  } catch (e) {}
+
+  // ── 8. screen / viewport coherence with the declared device ───────────────
+  try {
+    var s = R.screen;
+    def(screen, 'width', s.width); def(screen, 'height', s.height);
+    def(screen, 'availWidth', s.availWidth); def(screen, 'availHeight', s.availHeight);
+    def(screen, 'colorDepth', s.colorDepth); def(screen, 'pixelDepth', s.pixelDepth);
+    try { def(screen, 'orientation', { type: s.width > s.height ? 'landscape-primary' : 'portrait-primary', angle: 0, onchange: null }); } catch (e) {}
+    window.addEventListener('resize', function () {}, { passive: true });
+  } catch (e) {}
+
+  // ── 8b. window outer dims must be coherent with inner + screen ────────────
+  try {
+    var outer = function () { return { w: Math.max(innerWidth, Math.min(R.screen.width, innerWidth + 16)), h: Math.max(innerHeight, Math.min(R.screen.height, innerHeight + 88)) }; };
+    def(window, 'outerWidth', getter(function () { return outer().w; }), true);
+    def(window, 'outerHeight', getter(function () { return outer().h; }), true);
+  } catch (e) {}
+
+  // ── 9. media devices: a plausible, stable device list ─────────────────────
+  if (R.mediaDevices && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    var devices = [
+      { deviceId: 'default', kind: 'audioinput', label: '', groupId: 'grp-audio' },
+      { deviceId: 'communications', kind: 'audioinput', label: '', groupId: 'grp-audio' },
+      { deviceId: 'default', kind: 'audiooutput', label: '', groupId: 'grp-audio' },
+      { deviceId: 'vid-default', kind: 'videoinput', label: '', groupId: 'grp-video' },
+    ];
+    patch(navigator.mediaDevices, 'enumerateDevices', function () {
+      return Promise.resolve(devices.map(function (d) { var o = Object.create(MediaDeviceInfo.prototype); def(o, 'deviceId', d.deviceId); def(o, 'kind', d.kind); def(o, 'label', d.label); def(o, 'groupId', d.groupId); return o; }));
+    }, 'enumerateDevices');
+    try { def(navigator.mediaDevices, 'getSupportedConstraints', function () { return { width: true, height: true, frameRate: true, aspectRatio: true, deviceId: true, facingMode: true }; }); } catch (e) {}
+  }
+
+  // ── 10. WebRTC: optionally stop local-IP leakage ─────────────────────────
+  if (R.webrtc === 'block') {
+    try {
+      var RTC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+      if (RTC) {
+        var patchedRTC = function (cfg, constraints) {
+          var args = [cfg, constraints];
+          if (cfg && cfg.iceServers) args[0] = Object.assign({}, cfg, { iceServers: [] });
+          var pc = new RTC(...args);
+          var origAdd = pc.createOffer && pc.createOffer.bind(pc);
+          return pc;
+        };
+        patchedRTC.prototype = RTC.prototype;
+        markNative(patchedRTC, 'RTCPeerConnection');
+        window.RTCPeerConnection = patchedRTC;
+      }
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        patch(navigator.mediaDevices, 'getUserMedia', function () { return Promise.reject(Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' })); }, 'getUserMedia');
+      }
+    } catch (e) {}
+  }
+
+  // ── 10b. navigator.userAgentData — headless-shell lacks UA-CH entirely, and a
+  // "Windows Chrome" UA with no userAgentData is itself a contradiction ─────────
+  try {
+    if (!navigator.userAgentData && R.uaMetadata) {
+      var md = R.uaMetadata;
+      var highEntropy = {
+        architecture: md.architecture || 'x86',
+        bitness: md.bitness || '64',
+        brands: md.brands,
+        fullVersionList: md.brands.map(function (b) { return { brand: b.brand, version: md.fullVersion }; }),
+        mobile: !!md.mobile,
+        model: md.model || '',
+        platform: md.platform,
+        platformVersion: md.platformVersion,
+        uaFullVersion: md.fullVersion,
+        wow64: false,
+      };
+      var uad = {
+        brands: md.brands.slice(),
+        mobile: !!md.mobile,
+        platform: md.platform,
+        getHighEntropyValues: markNative(function (hints) {
+          var out = {};
+          (hints || []).forEach(function (h) { if (h in highEntropy) out[h] = highEntropy[h]; });
+          return Promise.resolve(out);
+        }, 'getHighEntropyValues'),
+        toJSON: markNative(function () { return { brands: md.brands.slice(), mobile: !!md.mobile, platform: md.platform }; }, 'toJSON'),
+      };
+      def(navigator, 'userAgentData', uad);
     }
   } catch (e) {}
 
-  // 6. WebGL vendor/renderer — report a common consumer GPU
+  // ── 11. misc surfaces detectors read ─────────────────────────────────────
+  try { def(navigator, 'connection', { effectiveType: '4g', rtt: 50, downlink: 10.5, saveData: false, onchange: null }); } catch (e) {}
   try {
-    var UNMASKED_VENDOR = 37445, UNMASKED_RENDERER = 37446;
-    var getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function (param) {
-      if (param === UNMASKED_VENDOR) return 'Intel Inc.';
-      if (param === UNMASKED_RENDERER) return 'Intel Iris OpenGL Engine';
-      return getParameter.apply(this, arguments);
+    navigator.getBattery = markNative(function () { return Promise.resolve({ charging: true, chargingTime: 0, dischargingTime: Infinity, level: 1, onchargingchange: null, onchargingtimechange: null, ondischargingtimechange: null, onlevelchange: null }); }, 'getBattery');
+  } catch (e) {}
+  try { def(navigator, 'pdfViewerEnabled', true); } catch (e) {}
+  try { if (R.mobile === false) def(navigator, 'standalone', undefined); } catch (e) {}
+  try { def(screen, 'isExtended', false); } catch (e) {}
+
+  // ── 12. hide our own engine surface from casual enumeration ───────────────
+  ${r.hideEngine ? String.raw`
+  try {
+    var hide = function () {
+      if (!window.__vlx) return;
+      // keep it reachable (our protocol calls it) but non-enumerable and toString-safe
+      try { Object.defineProperty(window, '__vlx', { value: window.__vlx, enumerable: false, configurable: true, writable: true }); } catch (e) {}
+      var V = window.__vlx;
+      if (V && typeof V === 'object') {
+        try { Object.defineProperty(V, '_bound', { enumerable: false }); } catch (e) {}
+      }
     };
-    var gpa2 = WebGL2RenderingContext.prototype.getParameter;
-    WebGL2RenderingContext.prototype.getParameter = function (param) {
-      if (param === UNMASKED_VENDOR) return 'Intel Inc.';
-      if (param === UNMASKED_RENDERER) return 'Intel Iris OpenGL Engine';
-      return gpa2.apply(this, arguments);
-    };
+    hide();
+    setTimeout(hide, 0);
   } catch (e) {}
+  ` : ''}
+})();`;
+}
 
-  // 7. hardware concurrency / device memory (plausible mid-range)
-  def(navigator, 'hardwareConcurrency', 8);
-  try { def(navigator, 'deviceMemory', 8); } catch (e) {}
-  def(navigator, 'platform', 'Win32');
-  try { def(navigator, 'oscpu', undefined); } catch (e) {}
 
-  // 8. iframe contentWindow.chrome passthrough
-  try {
-    var hIF = HTMLIFrameElement.prototype.__lookupGetter__('contentWindow');
-    if (hIF) {
-      Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', {
-        get: function () {
-          var w = hIF.apply(this, arguments);
-          if (w) { try { if (!w.chrome) w.chrome = window.chrome; } catch (e) {} }
-          return w;
-        },
-      });
-    }
-  } catch (e) {}
-
-  // 9. battery api sane default
-  try {
-    navigator.getBattery = function () { return Promise.resolve({ charging: true, chargingTime: 0, dischargingTime: Infinity, level: 1, onchargingchange: null, onchargingtimechange: null, ondischargingtimechange: null, onlevelchange: null }); };
-  } catch (e) {}
-
-  // 10. navigator.connection
-  try {
-    if (!navigator.connection) def(navigator, 'connection', { effectiveType: '4g', rtt: 50, downlink: 10, saveData: false });
-  } catch (e) {}
-})();
-`;
-
-/** Readable source kept for debugging; pages receive the compacted form. */
-export const STEALTH_SOURCE = compactSource(STEALTH_SOURCE_RAW);
-
+/** Default-profile source, kept for backwards compatibility (compacted for size). */
+export const STEALTH_SOURCE = buildStealthSource(resolveStealth(true)).replace(/^\s*\/\/.*$/gm, '').replace(/\n\s*/g, '\n');

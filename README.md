@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
-[![tests](https://img.shields.io/badge/tests-250%2F250-brightgreen)](https://github.com/loak7993-code/velox/actions)
+[![tests](https://img.shields.io/badge/tests-302%2F302-brightgreen)](https://github.com/loak7993-code/velox/actions)
 [![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
@@ -11,6 +11,8 @@
 
 **Works with Chrome, Chromium, Edge, Brave, Vivaldi, Opera, chrome-headless-shell —
 or skips the browser entirely when a page doesn't need one.**
+
+Coherent stealth fingerprints · human-like behaviour · Cloudflare/Akamai/PerimeterX awareness · extensible to the core
 
 </div>
 
@@ -473,6 +475,122 @@ vlx open example.com --proxy socks5://127.0.0.1:1080 --retries 2
 vlx open example.com --config ./velox.json
 ```
 
+### Acting like a real browser
+
+Detectors score **coherence** and **behaviour** far more than any single value. velox
+ships profile-driven fingerprints where every surface agrees, plus human interaction.
+
+```js
+await b.newPage({ stealth: true });                                  // coherent defaults
+await b.newPage({ stealth: { profile: 'chrome-windows', geo: 'de-DE' } });
+
+// every value in one profile agrees: UA ↔ Client Hints ↔ platform ↔ WebGL ↔
+// screen ↔ languages ↔ timezone ↔ locale ↔ fonts
+```
+
+| profile | platform | UA-CH | WebGL | timezone |
+|---|---|---|---|---|
+| `chrome-linux` | Linux x86_64 | Linux 6.6.0 | Intel UHD 630 / ANGLE D3D11 | America/New_York |
+| `chrome-windows` | Win32 | Windows 15.0.0 | NVIDIA GTX 1660 SUPER | America/Chicago |
+| `chrome-mac` | MacIntel | macOS 14.5.0 | Apple M1 Pro / Metal | America/Los_Angeles |
+| `chrome-android` | Linux armv8l | Android 14 | Adreno 740 | America/New_York |
+
+`geo: 'de-DE'` rewrites locale, timezone **and** `Accept-Language` together (15 presets) —
+a German IP with `en-US` and `America/New_York` is a contradiction, and that is what
+actually gets you flagged.
+
+Hardened surfaces: `navigator.webdriver`, plugins/mimeTypes with correct prototypes,
+`window.chrome` (runtime/app/csi/loadTimes), permissions ↔ `Notification.permission`,
+WebGL vendor/renderer + debug-renderer consistency, **canvas & audio noise that is
+seeded and stable** (two reads of the same canvas agree — a mutating patch is itself a
+tell), `Function.prototype.toString` so patched builtins still report `[native code]`,
+`outerWidth`/`outerHeight` coherence with the viewport, `userAgentData` (UA-CH) including
+`getHighEntropyValues`, WebRTC leak blocking, `enumerateDevices`, battery, connection.
+
+```js
+// human-like interaction — what behavioural scoring actually measures
+await page.human.click('#login');                    // curved approach, dwell, hold
+await page.human.type('#email', 'me@example.com');   // per-key cadence, word pauses, rare corrections
+await page.human.scroll({ by: 900, read: true });    // wheel momentum + reading pauses
+await page.human.idle(2000);                         // small drift movements
+await page.human.readText('article', { wpm: 220 });  // believable reading beat
+```
+
+### Cloudflare · Akamai · PerimeterX
+
+Detect, wait for and engage bot-management challenges — with an honest report of what
+happened. Mock vendor pages ship in the test suite so this is verified offline.
+
+```js
+await page.goto(url);
+const info = await page.challenge.detect();
+// { vendor: 'cloudflare', challenged: true, cleared: false, signals: ['header:cf-mitigated', …] }
+
+// navigate *through* a challenge: waits, engages (Turnstile checkbox, PX press-and-hold,
+// interstitial verify button), then retries once clearance lands
+const { response, challenge } = await page.challenge.goto(url, { human: true, timeout: 45000 });
+console.log(challenge.outcome);   // { vendor, cleared: true, acted: ['turnstile-click'], ms: 1500 }
+```
+
+| vendor | detected by | engaged how |
+|---|---|---|
+| Cloudflare | `cf-mitigated`, `cf-ray`, `/cdn-cgi/challenge-platform/`, Turnstile iframes, `cf_clearance` | human-click the Turnstile checkbox, wait for clearance, re-navigate |
+| Akamai | `_abck`, `bm_sz`, `/akam/` sensor scripts, `Access Denied`/`Reference #` | let the real sensor run against a clean environment, wait for `_abck` |
+| PerimeterX | `_px`, `_pxhd`, `px-cloud.net`, `#px-captcha` | press-and-hold with jitter for ~10s, wait for `_px3` |
+| DataDome | `datadome`, `x-datadome` | wait for clearance |
+
+**Verified offline** against mock challenge pages in `test/site/`:
+
+```
+baseline (no stealth): 46/71 checks (65%)      ← a bare browser is detected
+with stealth:          71/71 checks (100%)     ← every vector closed
+Cloudflare mock: detected → Turnstile clicked → cf_clearance → reached the gated page
+Akamai mock:     detected → sensor ran → _abck issued
+PerimeterX mock: detected → press-and-hold → _px3 issued
+```
+
+**What this cannot do** (read this before filing an issue):
+
+- **IP reputation is decisive.** Datacenter/VPN ranges are blocked regardless of how
+  clean the fingerprint is. Use residential or mobile exits (`velox.ProxyPool`) that
+  **match the profile's geo** — a `de-DE` profile needs a German exit.
+- **Image/audio CAPTCHAs are not solved.** That requires a human or a solving service.
+- **Vendor sensor payloads are not forged.** We run the real scripts in a clean
+  environment; forging `_abck`/`_px` payloads is out of scope by design.
+- **Use a real browser for hard targets.** `chrome-headless-shell` is a stripped build;
+  for Cloudflare's managed challenge prefer full Chrome with `--headless=new` or headed
+  (`vlx detect` shows what you have, `VELOX_BROWSER` pins it).
+- **Warm, persistent profiles** (`launchPersistentContext`) age better than fresh ones.
+
+### Make it yours
+
+```js
+// middleware around EVERY page command: time it, log it, retry it, rewrite arguments
+velox.middleware(async ({ page, method, args }, next) => {
+  const t = Date.now();
+  const out = await next();
+  metrics.observe(method, Date.now() - t);
+  return out;
+});
+
+// your own methods on pages, browsers and locators
+velox.registerCommand('dismissBanners', async function () {
+  return this.click('.cookie-accept', { timeout: 800 }).catch(() => {});
+});
+velox.registerCommand('product', function () { return this.info?.product; }, { target: 'browser' });
+
+// global selector engines: usable as `name=value` on every page, in every frame
+velox.registerSelectorEngine('priceAbove', (value, root) =>
+  [...root.querySelectorAll('[data-price]')].filter((el) => +el.dataset.price > +value));
+
+// extra lifecycle hooks beyond plugins
+velox.hook('onNavigation', (page, url) => console.log('→', url));
+velox.hook('onChallenge', (page, info) => console.log('challenge:', info.vendor));
+
+page.ext.anything = 'your namespace';        // no collisions with the core
+velox.extensions();                          // introspect what you have registered
+```
+
 ## Coming from Playwright
 
 | Playwright | velox |
@@ -667,6 +785,28 @@ proxy: { server: 'http://127.0.0.1:8080', bypass: ['<-loopback>'] }
 ```
 
 Remote proxies and remote targets are unaffected.
+</details>
+
+<details>
+<summary><b>Can velox get past Cloudflare / Akamai / PerimeterX?</b></summary>
+
+It gives you the two things that matter most — a coherent environment and human-like
+behaviour — plus challenge detection and engagement:
+
+```js
+const page = await b.newPage({ stealth: { profile: 'chrome-windows', geo: 'de-DE' } });
+const { challenge } = await page.challenge.goto(url, { human: true });
+```
+
+Assessed honestly: a **clean-fingerprint browser passes the JS/behavioural layers** in
+most cases (verified at 100% against a 71-vector detector harness), and Turnstile
+checkboxes / PX press-and-hold are engaged automatically. What decides the rest is
+**IP reputation** (use residential exits that match the profile geo), **whether the
+vendor shows an image CAPTCHA** (not solvable by software without a solving service),
+and the **target's risk tolerance** (banks and some managed challenges will still hold
+you). Nothing here forges vendor sensor payloads; we run the real scripts in a clean
+browser. Treat it as "indistinguishable from a careful human on a decent IP", not
+"bypasses everything".
 </details>
 
 <details>

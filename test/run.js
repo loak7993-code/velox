@@ -6,6 +6,7 @@ const suites = [
   ['proxies', 'test/proxy.js'],
   ['bandwidth', 'test/bandwidth.js'],
   ['plugins + stability', 'test/features.js'],
+  ['stealth + challenges + extensibility', 'test/stealth.js'],
   ['smoke (cdp core)', 'test/smoke.js'],
   ['lite + auto engine', 'test/lite.js'],
   ['pool', 'test/pool.js'],

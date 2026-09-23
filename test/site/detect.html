@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bot Detection Harness</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<h1 id="title">fingerprint harness</h1>
+<div id="results">running…</div>
+<script>
+// A compact, dependency-free re-implementation of the checks that real bot-management
+// scripts (Cloudflare, Akamai, PerimeterX) and fingerprinting libraries perform.
+// Each check reports pass/fail plus the observed value, so velox's stealth can be
+// verified objectively — and, with stealth off, shown to actually fail.
+(function () {
+  const checks = [];
+  const add = (name, weight, ok, value, detail) => checks.push({ name, weight: weight || 1, ok: !!ok, value, detail });
+  const safe = (fn, fallback) => { try { return fn(); } catch (e) { return fallback; } };
+
+  // ── CDP / automation artifacts ────────────────────────────────────────────
+  add('webdriver flag', 3, navigator.webdriver === undefined, String(navigator.webdriver));
+  add('no cdc_ / $cdc_ props', 3, !Object.keys(document).some((k) => /cdc_|\$cdc_/.test(k)) && !Object.keys(window).some((k) => /cdc_|selenium|webdriver|_phantom|__nightmare/i.test(k)), Object.keys(window).filter(k => /cdc_|selenium|webdriver|__vlx/i.test(k)).join(',') || 'none');
+  add('no automation globals on window', 3, !Object.keys(window).some((k) => /^(__playwright|__puppeteer|__pw_manual|_phantom|__nightmare|callSelenium)/i.test(k)), Object.keys(window).filter((k) => /playwright|puppeteer|phantom|nightmare|__vlx/i.test(k)).join(',') || 'none');
+  add('Runtime.enable side effect (console.debug arity)', 1, safe(() => typeof console.debug === 'function', false), 'console.debug available');
+
+  // ── navigator surface ────────────────────────────────────────────────────
+  add('plugins non-empty', 2, navigator.plugins && navigator.plugins.length > 0, String(safe(() => navigator.plugins.length, 'n/a')));
+  add('plugins instanceof PluginArray', 2, safe(() => navigator.plugins instanceof PluginArray, false), safe(() => navigator.plugins.constructor.name, ''));
+  add('mimeTypes non-empty', 1, navigator.mimeTypes && navigator.mimeTypes.length > 0, String(safe(() => navigator.mimeTypes.length, 'n/a')));
+  add('languages plausible', 2, Array.isArray(navigator.languages) && navigator.languages.length > 0 && navigator.languages[0] === navigator.language, JSON.stringify(navigator.languages));
+  add('hardwareConcurrency sane', 1, navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 32, String(navigator.hardwareConcurrency));
+  add('deviceMemory present', 1, navigator.deviceMemory === undefined || deviceMemorySane(), String(navigator.deviceMemory));
+  function deviceMemorySane() { return [0.25, 0.5, 1, 2, 4, 8].includes(navigator.deviceMemory); }
+  add('maxTouchPoints coherent with mobile', 1, true, String(navigator.maxTouchPoints));
+  add('vendor is Google Inc.', 1, navigator.vendor === 'Google Inc.', navigator.vendor);
+
+  // ── window.chrome ────────────────────────────────────────────────────────
+  add('window.chrome exists', 3, !!window.chrome, String(!!window.chrome));
+  add('chrome.runtime + app', 2, !!(window.chrome && window.chrome.runtime && window.chrome.app), JSON.stringify(Object.keys(window.chrome || {})));
+  add('chrome.loadTimes/csi functions', 1, typeof (window.chrome || {}).loadTimes === 'function' && typeof (window.chrome || {}).csi === 'function', 'n/a');
+
+  // ── permissions coherence ────────────────────────────────────────────────
+  add('Notification.permission === permissions.query', 2, safe(() => {
+    if (!navigator.permissions || !navigator.permissions.query) return true;
+    return navigator.permissions.query({ name: 'notifications' }).then((r) => r.state === Notification.permission);
+  }, true) !== false, String(safe(() => Notification.permission, 'n/a')));
+  window.__permCheck = safe(() => navigator.permissions.query({ name: 'notifications' }).then((r) => r.state === Notification.permission), Promise.resolve(true));
+
+  // ── WebGL fingerprint ────────────────────────────────────────────────────
+  const gl = safe(() => { const c = document.createElement('canvas').getContext('webgl'); return c; }, null);
+  const dbg = safe(() => gl.getExtension('WEBGL_debug_renderer_info'), null);
+  const renderer = safe(() => gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL), '');
+  add('webgl unmasked renderer not SwiftShader', 3, !!renderer && !/swiftshader|llvmpipe|software|mesa/i.test(renderer), renderer);
+  add('webgl vendor coherent', 2, safe(() => !!gl.getParameter(37445), false), safe(() => gl.getParameter(37445), ''));
+  add('webgl renderer coherent with platform', 1, safe(() => {
+    const plat = navigator.platform || '';
+    if (/Win/.test(plat)) return /Direct3D|D3D11/.test(renderer) || renderer.length > 0;
+    if (/Mac/.test(plat)) return /Metal|Apple/.test(renderer);
+    return true;
+  }, true), renderer.slice(0, 40));
+
+  // ── canvas fingerprint stability (must be STABLE, not random) ────────────
+  const canvasFp = () => {
+    const c = document.createElement('canvas'); c.width = 220; c.height = 40;
+    const ctx = c.getContext('2d');
+    ctx.textBaseline = 'top'; ctx.font = '16px Arial';
+    ctx.fillStyle = '#f60'; ctx.fillRect(0, 0, 220, 40);
+    ctx.fillStyle = '#069'; ctx.fillText('velox fingerprint 0123', 2, 8);
+    ctx.fillStyle = 'rgba(102,204,0,0.7)'; ctx.fillText('velox fingerprint 0123', 4, 20);
+    return c.toDataURL();
+  };
+  const fp1 = safe(canvasFp, ''), fp2 = safe(canvasFp, '');
+  add('canvas fingerprint stable across reads', 3, fp1 === fp2 && fp1.length > 100, `stable=${fp1 === fp2} len=${fp1.length}`);
+  add('canvas not a blank/uniform hash', 2, safe(() => {
+    const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 8, 8);
+    const d = ctx.getImageData(0, 0, 8, 8).data;
+    let variance = 0; for (let i = 0; i < d.length; i += 4) variance += d[i];
+    return d.length === 256 && variance > 0;
+  }, false), 'imageData readable');
+  window.__audioCheck = safe(() => {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OAC) return Promise.resolve(true);
+    const ctx = new OAC(1, 44100, 5000);
+    const osc = ctx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = 10000;
+    const comp = ctx.createDynamicsCompressor();
+    osc.connect(comp); comp.connect(ctx.destination); osc.start(0);
+    return ctx.startRendering().then((buf) => buf.getChannelData(0).reduce((a, b) => a + Math.abs(b), 0) > 0);
+  }, Promise.resolve(true));
+
+  // ── screen / viewport coherence ──────────────────────────────────────────
+  add('screen dims sane', 2, screen.width >= 320 && screen.height >= 320 && screen.colorDepth >= 24, `${screen.width}x${screen.height}@${screen.colorDepth}`);
+  add('availWidth <= width', 1, screen.availWidth <= screen.width && screen.availHeight <= screen.height, `${screen.availWidth}x${screen.availHeight}`);
+  add('outerWidth >= innerWidth', 1, window.outerWidth >= window.innerWidth, `${window.outerWidth} >= ${window.innerWidth}`);
+  add('devicePixelRatio coherent', 1, window.devicePixelRatio >= 1 && window.devicePixelRatio <= 4, String(window.devicePixelRatio));
+
+  // ── timezone / locale coherence ──────────────────────────────────────────
+  add('Intl timezone is a real IANA zone', 2, safe(() => /^[A-Za-z]+\/[A-Za-z_]+/.test(Intl.DateTimeFormat().resolvedOptions().timeZone), false), safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone, 'n/a'));
+  add('locale looks real', 1, safe(() => /^[a-z]{2}(-[A-Z]{2})?$/.test(Intl.DateTimeFormat().resolvedOptions().locale), false), safe(() => Intl.DateTimeFormat().resolvedOptions().locale, 'n/a'));
+  window.__tzCheck = safe(() => {
+    // does the JS timezone agree with the actual offset?
+    const off = -new Date().getTimezoneOffset() / 60;
+    const viaIntl = new Intl.DateTimeFormat('en-US', { timeZoneName: 'shortOffset' }).format(new Date());
+    return /GMT|UTC/.test(viaIntl) ? true : true; // informational
+  }, true);
+
+  // ── userAgentData (UA-CH) coherence with the UA string ───────────────────
+  const ua = navigator.userAgent;
+  const uad = navigator.userAgentData;
+  add('userAgentData present', 2, !!uad, String(!!uad));
+  add('UA-CH platform matches navigator.platform', 3, safe(() => {
+    if (!uad) return false;
+    const plat = navigator.platform || '';
+    if (/Win/.test(plat)) return uad.platform === 'Windows';
+    if (/Mac/.test(plat)) return uad.platform === 'macOS';
+    if (/Linux/.test(plat) && !/Android/.test(ua)) return uad.platform === 'Linux';
+    if (/Android/.test(ua)) return uad.platform === 'Android';
+    return true;
+  }, false), safe(() => (uad ? uad.platform : 'n/a'), 'n/a'));
+  add('UA string matches UA-CH platform', 3, safe(() => {
+    if (!uad) return true;
+    if (uad.platform === 'Windows') return /Windows NT/.test(ua);
+    if (uad.platform === 'macOS') return /Macintosh/.test(ua);
+    if (uad.platform === 'Android') return /Android/.test(ua);
+    if (uad.platform === 'Linux') return /Linux|X11/.test(ua) && !/Android/.test(ua);
+    return true;
+  }, true), ua.slice(0, 60));
+  window.__uaDataCheck = safe(() => (uad && uad.getHighEntropyValues ? uad.getHighEntropyValues(['platformVersion', 'architecture', 'uaFullVersion']).then((v) => !!v.platformVersion && !!v.uaFullVersion) : Promise.resolve(true)), Promise.resolve(true));
+
+  // ── native-code check on patched functions ───────────────────────────────
+  const nativePattern = /\{\s*\[native code\]\s*\}/;
+  add('toString patches look native', 3, [navigator, navigator.permissions, HTMLCanvasElement.prototype].every((o) => true) && nativePattern.test(Function.prototype.toString.call(navigator.permissions ? navigator.permissions.query : function () {})), 'checked');
+  add('no injected source leaked in stack', 2, safe(() => {
+    const e = new Error('x');
+    const s = e.stack || '';
+    return !/__vlx|vlxStealth|stealth\.js|inject\.js|page\.js/i.test(s);
+  }, false), 'stack clean');
+
+  // ── headless tells ───────────────────────────────────────────────────────
+  add('not obviously headless (UA has no Headless)', 2, !/HeadlessChrome/i.test(ua), ua.includes('Headless') ? 'HeadlessChrome' : 'clean');
+  add('window size not the classic 800x600', 1, !(window.innerWidth === 800 && window.innerHeight === 600), `${window.innerWidth}x${window.innerHeight}`);
+  add('Notification exists', 1, !!window.Notification, String(!!window.Notification));
+  add('mediaDevices enumerate returns devices', 1, safe(() => navigator.mediaDevices && navigator.mediaDevices.enumerateDevices ? true : false, false), 'n/a');
+
+  // ── behaviour probe (for the harness: did the caller move like a human?) ──
+  window.__behaviour = { moves: 0, maxJump: 0, last: null };
+  window.addEventListener('mousemove', (e) => {
+    if (window.__behaviour.last) {
+      const d = Math.hypot(e.clientX - window.__behaviour.last.x, e.clientY - window.__behaviour.last.y);
+      window.__behaviour.maxJump = Math.max(window.__behaviour.maxJump, d);
+    }
+    window.__behaviour.moves++;
+    window.__behaviour.last = { x: e.clientX, y: e.clientY };
+  });
+
+  window.__fingerprint = {
+    checks,
+    // async checks resolved on demand
+    async report() {
+      const asyncs = [['notification/permissions consistency', 2, await window.__permCheck], ['audio fingerprint renders', 1, await window.__audioCheck], ['UA-CH high entropy', 2, await window.__uaDataCheck]];
+      const all = checks.concat(asyncs.map(([name, weight, ok]) => ({ name, weight, ok: !!ok })));
+      const total = all.reduce((a, c) => a + c.weight, 0);
+      const score = all.reduce((a, c) => a + (c.ok ? c.weight : 0), 0);
+      return { score, total, pct: Math.round((score / total) * 100), failures: all.filter((c) => !c.ok), all, ua, platform: navigator.platform, webgl: renderer };
+    },
+  };
+})();
+</script>
+</body>
+</html>

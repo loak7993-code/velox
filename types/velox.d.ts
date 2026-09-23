@@ -156,7 +156,40 @@ declare module 'velox' {
     blockThirdParty?: boolean;
   }
 
+  export interface StealthOptions {
+    profile?: 'chrome-linux' | 'chrome-windows' | 'chrome-mac' | 'chrome-android';
+    geo?: string;                  // 'de-DE' → locale + timezone + Accept-Language together
+    locale?: string; timezone?: string; acceptLanguage?: string;
+    noise?: boolean;               // canvas/audio noise (default true)
+    seed?: number;                 // deterministic noise: same seed → same fingerprint
+    webrtc?: 'default' | 'block';
+    mediaDevices?: boolean;
+    hideEngine?: boolean;
+  }
+
+  export interface ChallengeInfo {
+    vendor: string | null;
+    detected: string[];
+    signals: string[];
+    cleared: boolean;
+    challenged: boolean;
+    outcome?: { vendor: string | null; cleared: boolean; acted: string[]; ms: number; timeout?: boolean };
+  }
+
+  export interface HumanBehaviour {
+    moveTo(x: number, y: number, o?: { overshoot?: number }): Promise<HumanBehaviour>;
+    click(sel: string, o?: { hold?: number; dwell?: number; button?: string }): Promise<VeloxPage>;
+    clickAt(x: number, y: number, o?: { hold?: number; button?: string }): Promise<VeloxPage>;
+    type(sel: string, text: string, o?: { cps?: number; mistakes?: number }): Promise<VeloxPage>;
+    scroll(o?: { by?: number; read?: boolean; to?: number }): Promise<HumanBehaviour>;
+    idle(ms?: number): Promise<HumanBehaviour>;
+    readText(sel: string, o?: { wpm?: number }): Promise<number>;
+    position(): Promise<{ x: number; y: number }>;
+  }
+
   export interface PageOptions {
+    stealth?: boolean | StealthOptions;
+    human?: boolean | { seed?: number; speed?: number; jitter?: number };
     bandwidth?: 'full' | 'lean' | 'minimal' | 'text-only' | BandwidthRules;
     capture?: boolean;              // false = skip the Network domain (faster, no request log)
     proxy?: ProxyOptions;
@@ -297,6 +330,18 @@ declare module 'velox' {
     transferred(): { total: number; byType: Record<string, number>; human: string; blockedBytes: number; blocked: Record<string, number>; profile: string };
     blockedRequests(): { reason: string; count: number }[];
     setBandwidth(profile: PageOptions['bandwidth']): Promise<VeloxPage>;
+    /** Human-like interaction (attached automatically). */
+    human: HumanBehaviour;
+    /** Bot-management awareness: detect / engage / navigate through challenges. */
+    challenge: {
+      detect(o?: { url?: string }): Promise<ChallengeInfo>;
+      isCleared(vendor?: string | null, o?: { url?: string }): Promise<boolean>;
+      engage(o?: { human?: boolean; vendor?: string; timeout?: number }): Promise<any>;
+      goto(url: string, o?: { timeout?: number; waitUntil?: string; engage?: boolean; human?: boolean }): Promise<{ response: any; challenge: ChallengeInfo }>;
+      open(url: string, o?: any): Promise<any>;
+    };
+    /** Free namespace for your own extensions. */
+    ext: Record<string, any>;
     prewarm(count?: number, opts?: PageOptions): Promise<number>;
     waitForDownload(timeout?: number): Promise<Download>;
     healthy(opts?: { timeout?: number }): Promise<boolean>;
@@ -540,6 +585,20 @@ declare module 'velox' {
     plugins: Record<string, any>;
     registerDevice(name: string, def: Device): Device;
     createCache(opts?: { dir?: string; ttl?: number; maxEntries?: number; maxBytes?: number }): HttpCache;
+    /** Wrap every page command: velox.middleware((ctx, next) => …) */
+    middleware(fn: (ctx: { page: VeloxPage; method: string; args: any[] }, next: (args?: any[]) => Promise<any>) => any): () => void;
+    /** Add your own methods to pages, browsers or locators. */
+    registerCommand(name: string, fn: (...args: any[]) => any, o?: { target?: 'page' | 'browser' | 'locator' }): any;
+    /** Register a selector engine globally (usable as `name=value` everywhere). */
+    registerSelectorEngine(name: string, fn: ((value: string, root: any) => any[]) | string): any;
+    /** Extra lifecycle hooks: onNavigation, onPage, onBrowser, onRequest, onResponse, onError, onChallenge. */
+    hook(name: string, fn: (...args: any[]) => void): () => void;
+    /** Introspect registered extensions. */
+    extensions(): { middleware: number; commands: { page: string[]; browser: string[]; locator: string[] }; selectorEngines: string[]; hooks: Record<string, number> };
+    /** Stealth profiles + geo presets. */
+    STEALTH: { profiles: Record<string, any>; geo: Record<string, any> };
+    /** Challenge helpers usable without a page handle. */
+    challenge: { detect: any; engage: any; goto: any; vendors: Record<string, any> };
     /** Pre-launch browsers (and optionally pages) so launch()/open() are instant. */
     prewarm(opts?: LaunchOptions & { browsers?: number; pagesPerBrowser?: number }): Promise<Browser[]>;
     BANDWIDTH: Record<'full' | 'lean' | 'minimal' | 'text-only', BandwidthRules>;

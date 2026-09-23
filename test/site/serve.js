@@ -110,6 +110,81 @@ export function createSite() {
           setTimeout(function () { document.getElementById('timer').textContent = 'fired'; }, 30000);
         </script></body></html>`);
     }
+    // ── mock bot-management challenges (local, deterministic) ────────────────
+    // Cloudflare-like: JS challenge that inspects the environment, then a fake
+    // Turnstile widget whose checkbox must be clicked before the clearance cookie lands
+    if (path === '/challenge/cf') {
+      const body = `<!doctype html><html><head><title>Just a moment...</title></head><body>
+        <h1>Checking your browser before accessing the site.</h1>
+        <div id="challenge-running">Verifying you are human. This may take a few seconds.</div>
+        <div id="turnstile-wrapper" style="width:300px;height:65px;border:1px solid #ccc;margin-top:20px;display:flex;align-items:center;justify-content:center;cursor:pointer">
+          <span id="ts-label">Verify you are human</span>
+        </div>
+        <script src="/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1"></script>
+        <script>
+          // "sensor" checks a real challenge performs before issuing clearance
+          window._cf_chl_opt = { cvId: '3', cZone: 'mock' };
+          const webdriver = navigator.webdriver;
+          const headless = /HeadlessChrome/.test(navigator.userAgent);
+          const noPlugins = !navigator.plugins || navigator.plugins.length === 0;
+          const badGl = (() => { try { const c=document.createElement('canvas').getContext('webgl'); const e=c.getExtension('WEBGL_debug_renderer_info'); return /swiftshader|llvmpipe/i.test(c.getParameter(e.UNMASKED_RENDERER_WEBGL)); } catch(e){ return true; } })();
+          const clean = webdriver === undefined && !headless && !noPlugins && !badGl;
+          window.__cf_state = { webdriver, headless, noPlugins, badGl, clean };
+          let clicked = false;
+          document.getElementById('turnstile-wrapper').addEventListener('click', () => {
+            clicked = true;
+            document.getElementById('ts-label').textContent = 'Verifying…';
+            setTimeout(() => {
+              if (clean || clicked) {
+                document.cookie = 'cf_clearance=mock-clearance-' + Date.now() + '; path=/; max-age=3600';
+                document.getElementById('challenge-running').textContent = 'Success. Redirecting…';
+              } else {
+                document.getElementById('challenge-running').textContent = 'Verification failed.';
+              }
+            }, 400);
+          });
+        </script></body></html>`;
+      res.writeHead(403, { 'content-type': 'text/html', 'cf-mitigated': 'challenge', 'cf-ray': 'mock-ray-1' });
+      return res.end(body);
+    }
+    if (path === '/challenge/cf/ok') {
+      // the "real" page, served only once clearance is present
+      const ok = /cf_clearance=/.test(req.headers.cookie || '');
+      res.writeHead(ok ? 200 : 403, { 'content-type': 'text/html' });
+      return res.end(ok ? '<html><head><title>Protected content</title></head><body><h1 id="secret">you made it past the challenge</h1></body></html>'
+                        : '<html><head><title>Just a moment...</title></head><body><div id="challenge-running">nope</div></body></html>');
+    }
+    // Akamai-like: sensor script sets _abck only for a plausible environment
+    if (path === '/challenge/akamai') {
+      const body = `<!doctype html><html><head><title>Access Denied</title></head><body>
+        <h1>Access Denied</h1><p>Reference #18.mock</p>
+        <script src="/akam/13/mock"></script>
+        <script>
+          const ok = navigator.webdriver === undefined && !!window.chrome && navigator.plugins.length > 0;
+          if (ok) { document.cookie = '_abck=mock~-1~-1~-1; path=/; max-age=3600'; document.title = 'ok'; }
+          else { document.cookie = '_abck=mock~0~-1~-1; path=/'; }
+        </script></body></html>`;
+      res.writeHead(200, { 'content-type': 'text/html', 'server': 'AkamaiGHost' });
+      return res.end(body);
+    }
+    // PerimeterX-like: press & hold captcha, then _px3
+    if (path === '/challenge/px') {
+      const body = `<!doctype html><html><head><title>Verify you are a human</title></head><body>
+        <div id="px-captcha" style="width:320px;height:120px;background:#eee;display:flex;align-items:center;justify-content:center">Press &amp; Hold</div>
+        <script src="/mock/px-cloud/client.js"></script>
+        <script>
+          const el = document.getElementById('px-captcha');
+          let downAt = 0;
+          el.addEventListener('mousedown', () => { downAt = Date.now(); });
+          el.addEventListener('mouseup', () => {
+            const held = Date.now() - downAt;
+            document.title = 'held:' + held;
+            if (held > 1500) { document.cookie = '_px3=mock-px3; path=/; max-age=3600'; document.title = 'ok:' + held; }
+          });
+        </script></body></html>`;
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(body);
+    }
     if (path === '/workers.html') {
       res.writeHead(200, { 'content-type': 'text/html' });
       return res.end(`<!doctype html><html><body>

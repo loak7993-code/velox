@@ -9,6 +9,7 @@ import { VeloxPage } from './page.js';
 import { BrowserContext } from './context.js';
 import { proxyFlags, normalizeProxy } from '../proxy.js';
 import { getConfig, applyLaunchOptions, runHook, hasHook } from '../plugins.js';
+import { applyExtensions } from '../extend.js';
 import { Emitter } from '../util.js';
 
 const HEADLESS_OK = (p) => !/headless-shell/i.test(p);
@@ -254,6 +255,7 @@ export class Browser extends Emitter {
         throw e;
       }
     }
+    applyExtensions(browser, 'browser');
     runHook('onBrowser', browser);
     return browser;
   }
@@ -288,7 +290,8 @@ export class Browser extends Emitter {
       '--disable-client-side-phishing-detection', '--disable-ipc-flooding-protection',
       '--metrics-recording-interval=2147483647', '--no-service-autorun',
       ...(HEADLESS_OK(exe) && headless ? ['--headless=new'] : []),
-      ...(opts.windowSize ? [`--window-size=${opts.windowSize[0]},${opts.windowSize[1]}`] : []),
+      // a real window is never smaller than the viewport; detectors check outer >= inner
+      `--window-size=${(opts.windowSize || [1280, 900])[0]},${(opts.windowSize || [1280, 900])[1]}`,
       ...(proxy ? proxyFlags(proxy) : []),
       ...args,
     ])];
@@ -353,6 +356,7 @@ export class Browser extends Emitter {
           .finally(() => { b._reconnecting = false; });
       });
     }
+    applyExtensions(b, 'browser');
     runHook('onBrowser', b);
     return b;
   }

@@ -17,6 +17,9 @@ import { expect } from './assert.js';
 import { createRequire } from 'node:module';
 const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
+import { middleware, registerCommand, registerSelectorEngine, hook, registered as registeredExtensions } from './extend.js';
+import { PROFILES as STEALTH_PROFILES, GEO as STEALTH_GEO } from './cdp/stealth.js';
+import { detect as detectChallenge, engage as engageChallenge, goto as gotoChallenge, VENDORS as CHALLENGE_VENDORS } from './challenge.js';
 import { config, getConfig, use, registerDevice, registeredDevices, plugins as pluginPresets, registeredPluginList } from './plugins.js';
 import { PRESETS as BANDWIDTH_PROFILES, resolveBandwidth, fmtBytes } from './bandwidth.js';
 
@@ -66,6 +69,20 @@ const velox = {
   registerDevice,
   /** Bandwidth profiles: velox.BANDWIDTH.lean | .minimal | .text-only */
   BANDWIDTH: BANDWIDTH_PROFILES,
+  /** Wrap every page command: velox.middleware((ctx, next) => …) */
+  middleware,
+  /** Add your own methods: velox.registerCommand('name', fn) */
+  registerCommand,
+  /** Global selector engines: velox.registerSelectorEngine('name', fn) */
+  registerSelectorEngine,
+  /** Lifecycle hooks: velox.hook('onNavigation', fn) */
+  hook,
+  /** Introspect registered extensions. */
+  extensions: registeredExtensions,
+  /** Stealth profiles + geo presets (coherent fingerprint sets). */
+  STEALTH: { profiles: STEALTH_PROFILES, geo: STEALTH_GEO },
+  /** Bot-management awareness: detect / engage / goto-through. */
+  challenge: { detect: detectChallenge, engage: engageChallenge, goto: gotoChallenge, vendors: CHALLENGE_VENDORS },
   resolveBandwidth,
   fmtBytes,
   Browser,
@@ -86,6 +103,8 @@ export {
   WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, createCache, HttpCache, expect,
   ProxyPool, checkProxy, normalizeProxy, proxyFlags,
   config, getConfig, use, registerDevice, registeredDevices, pluginPresets as plugins,
+  middleware, registerCommand, registerSelectorEngine, hook, registeredExtensions,
+  STEALTH_PROFILES, STEALTH_GEO, detectChallenge, engageChallenge, gotoChallenge, CHALLENGE_VENDORS,
   BANDWIDTH_PROFILES, resolveBandwidth, fmtBytes,
 };
 export default velox;

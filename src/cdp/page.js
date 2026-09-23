@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Emitter, sleep, withTimeout, TimeoutError, randInt, humanDelay } from '../util.js';
 import { ENGINE_SOURCE } from './inject.js';
-import { STEALTH_SOURCE } from './stealth.js';
+import { STEALTH_SOURCE, resolveStealth, buildStealthSource } from './stealth.js';
 import { DEVICES } from './devices.js';
 import { buildHar } from './har.js';
 import { Locator, byRoleSel, byTextSel, byLabelSel, byPlaceholderSel, byAltTextSel, byTitleSel, byTestIdSel } from './locator.js';
@@ -15,6 +15,9 @@ import { Accessibility } from './accessibility.js';
 import { Clock, CLOCK_SOURCE } from './clock.js';
 import { getConfig, applyPageOptions, runHook, hasHook, registeredDevices } from '../plugins.js';
 import { resolveBandwidth, sameSite, fmtBytes } from '../bandwidth.js';
+import { attachHuman } from '../human.js';
+import { attachChallenge } from '../challenge.js';
+import { applyExtensions, makeExtNamespace, chainFor, selectorEngineSource, runHooks } from '../extend.js';
 
 const KEYMAP = {
   enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
@@ -124,6 +127,9 @@ export class VeloxPage extends Emitter {
     this._capture = opts.capture !== false;
     // bandwidth profile: block resource types, cap body sizes, drop third-party chatter
     this._bw = resolveBandwidth(opts.bandwidth);
+    // a coherent stealth profile drives landing UA, Client Hints, locale, timezone and
+    // Accept-Language together — detectors score contradictions between these
+    this._stealth = resolveStealth(opts.stealth);
     this._bytesBlocked = 0; this._blockedByType = {};
     // single pipelined batch — all domain enables fly at once
     const jobs = [
@@ -133,12 +139,15 @@ export class VeloxPage extends Emitter {
       s.send('Page.setLifecycleEventsEnabled', { enabled: true }),
     ];
     await Promise.all(jobs).catch(() => {});
+    // UA + Client Hints + locale + timezone + Accept-Language must be coherent, and must
+    // land before the first navigation (they are read from the very first request)
+    if (this._stealth) await this._applyStealthEnv().catch(() => {});
     // scripts apply to every future navigation (deduped per page — _init may run twice
     // when auto-attach races an explicit newPage, and that must stay harmless)
     this._initScriptSources = this._initScriptSources || new Set();
     const initScripts = [
       ENGINE_SOURCE,
-      ...(opts.stealth ? [STEALTH_SOURCE] : []),
+      ...(this._stealth ? [buildStealthSource(this._stealth)] : []),
       ...(opts.clock ? [CLOCK_SOURCE] : []),
       ...(opts.serviceWorkers === 'block' ? ['(function(){try{if(navigator.serviceWorker)navigator.serviceWorker.register=function(){return Promise.reject(new Error("service workers blocked by velox"))}}catch(e){}})()'] : []),
       ...(opts.initScripts || []),
@@ -194,7 +203,21 @@ export class VeloxPage extends Emitter {
     // plugin network hooks arm interception only when a plugin actually wants them
     if (hasHook('onRequest')) this.route('**/*', (req) => { runHook('onRequest', req); if (!req._handled) req.continue(); });
     if (hasHook('onResponse')) this.on('response', (entry) => runHook('onResponse', entry));
-    if (!this._pluginsRan) { this._pluginsRan = true; runHook('onPage', this); }
+    if (!this._pluginsRan) {
+      this._pluginsRan = true;
+      attachHuman(this, opts.human === false ? { jitter: 0 } : (opts.human || {}));      // page.human.*
+      attachChallenge(this);                                                            // page.challenge.*
+      makeExtNamespace(this);                                                           // page.ext.*
+      applyExtensions(this, 'page');                                                     // velox.registerCommand(...)
+      const globalEngines = selectorEngineSource();
+      if (globalEngines) {
+        // an init script so they are re-installed on every navigation, plus one now
+        await this.session.send('Page.addScriptToEvaluateOnNewDocument', { source: globalEngines }).catch(() => {});
+        await this.session.send('Runtime.evaluate', { expression: globalEngines }).catch(() => {});
+      }
+      this._installMiddleware();
+      runHook('onPage', this);
+    }
     // unpause if this target was auto-attached with waitForDebuggerOnStart
     s.fire('Runtime.runIfWaitingForDebugger');
     this._initialized = true;
@@ -373,6 +396,7 @@ export class VeloxPage extends Emitter {
     const nav = await this.session.send('Page.navigate', { url, referrer: referer }).catch((e) => { throw new Error(`Navigation failed: ${e.message}`); });
     if (nav.errorText) throw new Error(`Navigation error: ${nav.errorText} (${url})`);
     this._url = url;
+    runHooks('onNavigation', this, url);
     if (waitUntil === 'none') return { url, status: null, ms: Date.now() - t0 };
     const map = { interactive: 'DOMContentLoaded', interactive2: 'domcontentinteractive', load: 'load', networkidle: 'networkIdle2', settle: 'settle' };
     if (waitUntil === 'networkidle' || waitUntil === 'settle') {
@@ -514,6 +538,41 @@ export class VeloxPage extends Emitter {
     const ok = await this.session.send('Runtime.evaluate', { expression: 'typeof __vlx === "object" && !!__vlx.match' })
       .then((r) => r.result?.value).catch(() => false);
     if (!ok) await this.session.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
+  }
+
+  /**
+   * Install the middleware chain: every public method on the page is wrapped so user
+   * middleware can observe, time, retry, rewrite or veto any call.
+   */
+  _installMiddleware() {
+    if (this._mwInstalled) return this;
+    const chain = chainFor(this);
+    if (!chain.length) return this;
+    this._mwInstalled = true;
+    const skip = new Set(['then', 'catch', 'finally', 'on', 'once', 'off', 'emit', 'constructor', 'session', 'conn', 'browser', 'context']);
+    for (const proto of [Object.getPrototypeOf(this)]) {
+      for (const name of Object.getOwnPropertyNames(proto)) {
+        if (skip.has(name) || name.startsWith('_') || name === 'human' || name === 'challenge' || name === 'ext') continue;
+        const desc = Object.getOwnPropertyDescriptor(proto, name);
+        if (!desc || typeof desc.value !== 'function') continue;
+        const orig = desc.value;
+        Object.defineProperty(this, name, {
+          configurable: true, writable: true, enumerable: false,
+          value: async (...args) => {
+            let i = -1;
+            const next = async (rewrittenArgs) => {
+              i++;
+              if (i < chain.length) {
+                return chain[i]({ page: this, method: name, args: rewrittenArgs ?? args }, () => next(rewrittenArgs));
+              }
+              return orig.apply(this, rewrittenArgs ?? args);
+            };
+            return next(args);
+          },
+        });
+      }
+    }
+    return this;
   }
 
   /* ------------------------------------------- speed: batching ------------------------------------------- */
@@ -958,8 +1017,31 @@ export class VeloxPage extends Emitter {
     await this.session.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: dsf, mobile });
     return this;
   }
-  async setUA(ua, platform) {
-    await this.session.send('Network.setUserAgentOverride', { userAgent: ua, ...(platform ? { platform } : {}) });
+  async setUA(ua, platform, metadata) {
+    await this.session.send('Network.setUserAgentOverride', {
+      userAgent: ua,
+      ...(platform ? { platform } : {}),
+      ...(metadata ? { userAgentMetadata: metadata } : {}),
+    });
+    return this;
+  }
+
+  /** Apply the coherent stealth environment (UA, Client Hints, locale, tz, language). */
+  async _applyStealthEnv() {
+    const st = this._stealth;
+    if (!st) return this;
+    const s = this.session;
+    await Promise.all([
+      s.send('Network.setUserAgentOverride', {
+        userAgent: st.userAgent,
+        platform: st.values.platform,
+        ...(st.userAgentMetadata ? { userAgentMetadata: st.userAgentMetadata } : {}),
+      }),
+      s.send('Emulation.setLocaleOverride', { locale: st.locale }),
+      s.send('Emulation.setTimezoneOverride', { timezoneId: st.timezone }),
+      ...(st.values.mobile ? [s.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: st.values.maxTouchPoints || 5 })] : []),
+      s.send('Network.setExtraHTTPHeaders', { headers: { 'accept-language': st.acceptLanguage || st.languages.join(',') } }),
+    ]).catch(() => {});
     return this;
   }
   async setHeaders(headers) {
