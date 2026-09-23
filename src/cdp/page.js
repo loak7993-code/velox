@@ -1585,15 +1585,30 @@ export class Download {
     if (!src) throw new Error('download dir not configured');
     const { copyFileSync, mkdirSync, existsSync } = await import('node:fs');
     const { dirname } = await import('node:path');
-    // the browser renames its .crdownload temp to the guid name shortly AFTER
-    // reporting 'completed' — poll for the file (loaded machines can be slow to flush)
+    // Chrome renames its .crdownload temp to the guid name shortly AFTER reporting
+    // 'completed' — poll for it first.
     const deadline = Date.now() + 15000;
     while (!existsSync(src) && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 100));
     }
-    if (!existsSync(src)) throw new Error(`download file never appeared: ${src}`);
     mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(src, target);
+    if (existsSync(src)) {
+      copyFileSync(src, target);
+    } else {
+      // Fallback: headless browsers occasionally finish a download without landing the
+      // file (seen with --remote-debugging-pipe). Fetch the bytes ourselves with the
+      // page's cookies so saveAs() is deterministic instead of mysteriously empty.
+      const { fetch: liteFetch } = await import('../lite/engine.js');
+      const cookies = await this.page.cookies([this.url]).catch(() => []);
+      const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+      const res = await liteFetch(this.url, {
+        timeout: 60000,
+        headers: { ...(cookieHeader ? { cookie: cookieHeader } : {}) },
+        maxRedirects: 10,
+      });
+      writeFileSync(target, res.body);
+      this._fetchedDirectly = true;
+    }
     this._path = target;
     return target;
   }
