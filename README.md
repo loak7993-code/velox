@@ -562,6 +562,77 @@ PerimeterX mock: detected → press-and-hold → _px3 issued
   (`vlx detect` shows what you have, `VELOX_BROWSER` pins it).
 - **Warm, persistent profiles** (`launchPersistentContext`) age better than fresh ones.
 
+### Field helpers
+
+Shaped by real use against anti-bot-heavy targets (Amazon, Bright Data + Turnstile,
+Arkose/AWS-WAF flows) — the loops that get written over and over:
+
+```js
+// wait for a captcha token field to populate. On timeout it tells you WHICH state it
+// died in ("script never loaded" vs "widget present but token field missing"), instead
+// of a silent null. It does not solve the puzzle — it removes the boilerplate.
+const token = await page.waitForCaptchaToken('input[name="cf-turnstile-response"]', { timeout: 60000 });
+
+// what widget is actually here? (prefix-matches dynamic ids like turnstile_container_6243…)
+const w = await page.detectChallenge();
+// { type: 'turnstile', sitekey: '0x4AAA…', iframeUrl: 'https://challenges.cloudflare.com/…',
+//   containerId: 'turnstile_container_6243920994991472', visible: true, tokenPresent: false }
+
+// responses with bodies, and a filtered network log
+const resp = await page.waitForResponse(/checkout\/.*\/pay/);
+const json = await resp.json();                       // .text() / .body() / .status / .headers
+const xhr  = page.netlog(/api|checkout|auth/);        // → [{ method, status, url, postData, json() }]
+
+// one call → the whole forensic bundle (DOM, network, console, pageerrors, storage, screenshot)
+const dump = await page.debugDump('velox-debug');
+// → <dir>/{page.html,network.json,bodies.json,console.log,errors.log,cookies.json,storage.json,shot.png,summary.json}
+
+// flaky residential proxies are the normal case, not the exception
+await page.gotoWithRetry(url, { retries: 4, backoff: 400, onAttempt: (a, e) => log(a, e) });
+
+await page.human.warmup({ mouse: 3, scroll: 1, dwellMs: 900 });   // look alive before touching anything
+await page.human.hold('#px-captcha', { ms: 10000 });             // press & hold with tremor (PX)
+await page.cdp('Network.setBlockedURLs', { urls: ['*ads*'] });   // raw CDP one-liner
+```
+
+**Cookie hand-off for HTTP + browser hybrids** — the classic silent bug is a cookie
+whose domain lacks the leading dot (`amazon.com`), which then never matches
+`www.amazon.com`. All importers normalise, dedupe and report what they dropped:
+
+```js
+velox.importSession(cookieArray);                  // or a curl header, or a HAR file
+await velox.fetch(...) → browser takes over:
+const page = await b.newPage();                    // the pending session lands on first navigation
+await page.importSession(cookies);                 // or explicitly, on a live page
+await page.importCurl('cookie: session=abc; theme=dark', { domain: 'shop.example.com' });
+await page.importHAR('capture.har', { urlFilter: 'shop.example.com' });
+const state = await page.exportSession();          // Playwright-compatible storage state
+
+velox.normalizeCookies(cookies);
+// → { cookies: [...dotted, deduped, path-normalised], skipped: [{ cookie, why }], dropped: 1 }
+```
+
+**`page.eval()` returns real values** — objects and arrays come back as JSON, function
+strings are called, and anything that cannot cross the wire raises an explicit error
+rather than a silent `{}`:
+
+```js
+await page.eval('Object.keys(window.turnstile)');     // ['render','reset']
+await page.eval('() => document.body.innerText');     // 'hello'   (function-as-string works)
+await page.eval((n) => n * 2, 21);                    // 42
+await page.eval('document.body');
+// ✗ page.eval(): value is a DOM node (<body>) — read a property (textContent, value…)
+//   or use page.$()/extract()
+```
+
+For extracting page data, prefer **`extract()`** — it batches N elements × M fields in a
+single round-trip and never surprises you:
+
+```js
+await page.extract('.product', { text: true, attrs: ['data-sku', 'href'], html: false });
+await page.tables();  await page.meta();  await page.jsonld();  await page.readable();
+```
+
 ### Make it yours
 
 ```js

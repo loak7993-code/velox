@@ -75,6 +75,49 @@ declare module 'velox' {
     selectAll(sel: string): HtmlNode[];
   }
 
+  /** console messages (page.on('console')) */
+  export interface ConsoleMessage { type: string; text: string; page: VeloxPage; }
+  /** uncaught page errors (page.on('pageerror')) */
+  export interface PageErrorEvent { text: string; url?: string; line?: number; page: VeloxPage; }
+  /** dialogs (page.on('dialog')) */
+  export interface DialogEvent { type: string; message: string; url?: string; defaultPrompt?: string; respond(accept?: boolean, promptText?: string): Promise<void>; }
+
+  /** what waitForResponse()/netlog() hand back — bodies are one await away */
+  export interface ResponseView {
+    url: string;
+    status: number | null;
+    headers: Record<string, string>;
+    method: string;
+    postData?: string;
+    resourceType?: string;
+    fromCache?: boolean;
+    timing?: any;
+    entry: RequestEntry;
+    text(): Promise<string | null>;
+    body(): Promise<string | null>;
+    json(): Promise<any>;
+  }
+
+  export interface CaptchaTokenOptions { timeout?: number; poll?: number; type?: string; }
+  export interface ChallengeWidget {
+    type: 'turnstile' | 'recaptcha' | 'hcaptcha' | 'arkose' | 'awswaf-grid' | 'px' | null;
+    sitekey?: string | null;
+    iframeUrl?: string | null;
+    containerId?: string | null;
+    visible?: boolean;
+    tokenPresent?: boolean;
+    tokenLength?: number;
+    scriptLoaded?: boolean;
+    markers?: string[];
+  }
+  export interface DebugDumpResult {
+    dir: string; url: string; title: string | null;
+    console: { type: string; text: string }[];
+    errors: { text: string; url?: string; line?: number }[];
+    requests: number; cookies: number; createdAt: string;
+  }
+  export interface CookieImportResult { cookies: CookieEntry[]; skipped: { cookie: any; why: string }[]; dropped: number; }
+
   export interface CookieEntry { name: string; value: string; domain?: string; path?: string; expires?: number; httpOnly?: boolean; secure?: boolean; sameSite?: string; url?: string; }
 
   export interface RequestEntry {
@@ -182,6 +225,10 @@ declare module 'velox' {
     clickAt(x: number, y: number, o?: { hold?: number; button?: string }): Promise<VeloxPage>;
     type(sel: string, text: string, o?: { cps?: number; mistakes?: number }): Promise<VeloxPage>;
     scroll(o?: { by?: number; read?: boolean; to?: number }): Promise<HumanBehaviour>;
+    /** Press & hold with tremor for hold/style challenges (PerimeterX). */
+    hold(sel: string | { x: number; y: number }, o?: { ms?: number; jitter?: number; microMoves?: number; button?: string }): Promise<VeloxPage>;
+    /** Look alive before the first interaction: cursor moves, scrolls, idle dwell. */
+    warmup(o?: { mouse?: number; scroll?: number; dwellMs?: number }): Promise<VeloxPage>;
     idle(ms?: number): Promise<HumanBehaviour>;
     readText(sel: string, o?: { wpm?: number }): Promise<number>;
     position(): Promise<{ x: number; y: number }>;
@@ -342,6 +389,26 @@ declare module 'velox' {
     };
     /** Free namespace for your own extensions. */
     ext: Record<string, any>;
+    /** Wait for a captcha token field to populate; on timeout says WHICH state it died in. */
+    waitForCaptchaToken(selector?: string, o?: CaptchaTokenOptions): Promise<string>;
+    /** Structured info about the anti-bot widget on the page (prefix-matches dynamic container ids). */
+    detectChallenge(): Promise<ChallengeWidget>;
+    /** Filtered network log with lazy bodies: page.netlog(/checkout|auth/) */
+    netlog(filter?: string | RegExp | ((e: RequestEntry) => boolean)): ResponseView[];
+    /** DOM + network + console + errors + storage + screenshot in one call. */
+    debugDump(dir?: string, o?: { fullPage?: boolean }): Promise<DebugDumpResult>;
+    /** Navigate with backoff — flaky residential proxies are the normal case. */
+    gotoWithRetry(url: string, o?: { retries?: number; backoff?: number; factor?: number; waitUntil?: string; timeout?: number; onAttempt?: (a: any, e: Error | null) => void; retryOn?: (e: Error) => boolean }): Promise<{ url: string; status: number | null; ms: number; attempts: any[] }>;
+    /** Raw CDP passthrough. */
+    cdp(method: string, params?: Record<string, any>): Promise<any>;
+    cdpFire(method: string, params?: Record<string, any>): void;
+    /** Cookie/session plumbing for hybrid HTTP+browser pipelines. */
+    importSession(input: CookieEntry[] | string, o?: { domain?: string; urlFilter?: string | RegExp }): Promise<{ imported: number }>;
+    exportSession(): Promise<any>;
+    importCurl(cookieHeader: string, o?: { domain?: string }): Promise<{ imported: number }>;
+    importHAR(file: string, o?: { urlFilter?: string | RegExp }): Promise<{ imported: number }>;
+    /** Playwright alias for waitForLoad(). */
+    waitForLoadState(state?: 'load' | 'domcontentloaded' | 'networkidle', timeout?: number): Promise<boolean>;
     prewarm(count?: number, opts?: PageOptions): Promise<number>;
     waitForDownload(timeout?: number): Promise<Download>;
     healthy(opts?: { timeout?: number }): Promise<boolean>;
@@ -601,6 +668,14 @@ declare module 'velox' {
     challenge: { detect: any; engage: any; goto: any; vendors: Record<string, any> };
     /** Pre-launch browsers (and optionally pages) so launch()/open() are instant. */
     prewarm(opts?: LaunchOptions & { browsers?: number; pagesPerBrowser?: number }): Promise<Browser[]>;
+    /** Local forwarder for an authenticated upstream proxy (reliable where CDP proxy auth fails). */
+    proxyForward(upstream: any, o?: { host?: string; port?: number; auth?: { username: string; password: string } }): Promise<{ server: string; port: number; direct: boolean; stats: any; close(): Promise<void> }>;
+    /** Import a session (cookies array, curl header or HAR) — applies to the next page/context. */
+    importSession(input: any, o?: any): { cookies: CookieEntry[]; localStorage: any[] };
+    normalizeCookies(cookies: any): CookieImportResult;
+    parseCurlCookies(header: string, o?: { domain?: string }): CookieEntry[];
+    parseNetscapeCookies(text: string): CookieEntry[];
+    importHAR(source: string, o?: { urlFilter?: string | RegExp }): { cookies: CookieEntry[] };
     BANDWIDTH: Record<'full' | 'lean' | 'minimal' | 'text-only', BandwidthRules>;
     fmtBytes(n: number): string;
     Browser: any;

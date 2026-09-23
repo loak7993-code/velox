@@ -18,6 +18,7 @@ import { resolveBandwidth, sameSite, fmtBytes } from '../bandwidth.js';
 import { attachHuman } from '../human.js';
 import { attachChallenge } from '../challenge.js';
 import { applyExtensions, makeExtNamespace, chainFor, selectorEngineSource, runHooks } from '../extend.js';
+import { attachFieldHelpers, asResponse, takePendingSession } from '../field.js';
 
 const KEYMAP = {
   enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
@@ -185,8 +186,12 @@ export class VeloxPage extends Emitter {
     if (this._bw.blockTypes.size || this._bw.maxBytes || this._bw.blockThirdParty) await this._armBandwidth();
     if (opts.routes) for (const [pat, h] of Object.entries(opts.routes)) this.route(pat, h);
     if (opts.httpCredentials || proxyCred) {
-      // intercept auth challenges (site login and/or proxy login)
-      await s.send('Fetch.enable', { handleAuthRequests: true }).catch(() => {});
+      // intercept auth challenges (site login and/or proxy login) on both domains:
+      // Fetch.* is the documented path, Network.* is the fallback some builds use
+      await Promise.all([
+        s.send('Fetch.enable', { handleAuthRequests: true }).catch(() => {}),
+        s.send('Network.enable', { maxPostDataSize: 65536 }).catch(() => {}),
+      ]);
       this._fetchOn = true;
     }
     if (opts.headers) await this.setHeaders(opts.headers);
@@ -208,6 +213,7 @@ export class VeloxPage extends Emitter {
       attachHuman(this, opts.human === false ? { jitter: 0 } : (opts.human || {}));      // page.human.*
       attachChallenge(this);                                                            // page.challenge.*
       makeExtNamespace(this);                                                           // page.ext.*
+      attachFieldHelpers(this);                                                         // waitForCaptchaToken, netlog, debugDump, cdp…
       const globalEngines = selectorEngineSource();
       if (globalEngines) {
         // an init script so they are re-installed on every navigation, plus one now
@@ -296,6 +302,17 @@ export class VeloxPage extends Emitter {
         child._init(this.context ? this.context.pageDefaults() : {}).catch(() => {});
       }
     });
+    // Some builds deliver proxy challenges on Network.* instead of Fetch.* — handle both,
+    // and never answer the same challenge twice.
+    s.on('Network.authRequired', async (challenge) => {
+      const isProxy = String(challenge.authChallenge?.source || '').toLowerCase() === 'proxy';
+      const cred = isProxy ? (this._proxyCredentials || this.browser?.proxy || null) : this._httpCredentials;
+      if (!cred?.username) return this.session.send('Network.continueWithAuth', { requestId: challenge.requestId, authChallengeResponse: { response: 'DefaultAuthCredentials' } }).catch(() => {});
+      await this.session.send('Network.continueWithAuth', {
+        requestId: challenge.requestId,
+        authChallengeResponse: { response: 'ProvideCredentials', username: cred.username, password: cred.password },
+      }).catch(() => {});
+    });
     s.on('Fetch.authRequired', (challenge) => {
       // two different challenges share this event: the proxy login and the site login
       const isProxy = String(challenge.authChallenge?.source || '').toLowerCase() === 'proxy';
@@ -374,6 +391,9 @@ export class VeloxPage extends Emitter {
     else if (!/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = 'https://' + url;
     if (this._fetchReady) await this._fetchReady;   // let Fetch.enable land before navigating
     const t0 = Date.now();
+    // a session imported before the page existed (velox.importSession) lands here
+    const pendingImport = takePendingSession();
+    if (pendingImport?.cookies?.length) await this.setCookies(pendingImport.cookies).catch(() => {});
     // apply a pending Playwright-format storage state (cookies + localStorage) on first real navigation
     if (this._pendingStorageState && /^https?:/i.test(url)) {
       const state = this._pendingStorageState;
@@ -461,20 +481,94 @@ export class VeloxPage extends Emitter {
 
   /* ----------------------------------------------- evaluate ---------------------------------------------- */
 
+  /**
+   * Evaluate in the page. Handles every shape of input people actually pass:
+   *   page.eval('1+1')                        → 2
+   *   page.eval('Object.keys(x)')             → ['a','b']      (JSON round-trip)
+   *   page.eval(() => document.title)          → 'Example'      (real function + arg)
+   *   page.eval('() => document.title')        → 'Example'      (function AS a string)
+   *   page.eval('var a=1; a+1')                → 2              (statements)
+   *
+   * It never returns a silent `{}`: unserialisable values (DOM nodes, symbols…)
+   * raise an error that says what to do instead — a silent empty object is
+   * indistinguishable from real data and wastes hours.
+   */
   async eval(jsOrFn, arg, { awaitPromise = true, timeout } = {}) {
-    const js = typeof jsOrFn === 'function' ? buildEvalExpr(jsOrFn, arg) : jsOrFn;
+    const isFn = typeof jsOrFn === 'function';
+    const src = isFn ? jsOrFn.toString() : jsOrFn;
+    const argJson = JSON.stringify(arg ?? null);
+
+    // fast path for internal primitives, and for callers that need raw promise semantics
+    if (!awaitPromise) {
+      const raw = isFn ? `(${src})(${argJson})` : `${src}`;
+      return this._evalRaw(raw, { awaitPromise: false, timeout });
+    }
+
+    // safe path: unwrap functions (real or pasted as strings), await promises,
+    // JSON round-trip objects, and explain anything that cannot cross the wire
+    // wrapper: unwrap function values (real or pasted as strings), await promises,
+    // JSON round-trip objects, and explain anything that cannot cross the wire
+    const wrap = (expr) => `(async () => {
+      let v = (${expr});
+      if (typeof v === 'function') v = v(${argJson});
+      if (v && typeof v.then === 'function') v = await v;      // promises (from wait helpers too)
+      if (v === undefined) return { __vx: 'undefined' };
+      if (v === null) return { __vx: 'null' };
+      const t = typeof v;
+      if (t === 'string' || t === 'number' || t === 'boolean') return { __vx: 'value', v };
+      if (t === 'bigint') return { __vx: 'value', v: String(v) + 'n' };
+      if (t === 'symbol') return { __vx: 'error', msg: 'cannot serialize a Symbol' };
+      if (typeof Node !== 'undefined' && v instanceof Node) {
+        return { __vx: 'error', msg: 'value is a DOM node (<' + (v.nodeName || 'node').toLowerCase() + '>) — read a property (textContent, value, href, outerHTML) or use page.$()/extract()' };
+      }
+      const seen = new WeakSet();
+      let json;
+      try { json = JSON.stringify(v, (k, val) => { if (val && typeof val === 'object') { if (seen.has(val)) return '[Circular]'; seen.add(val); } return val; }); }
+      catch (e) { return { __vx: 'error', msg: 'value is not serializable: ' + e.message + ' (return a plain object/array or a primitive)' }; }
+      if (json === undefined) return { __vx: 'error', msg: 'value of type ' + t + ' cannot be serialized — return a plain object/array or a primitive' };
+      return { __vx: 'json', json };
+    })()`;
+
+    let out;
+    try {
+      // function literals (real or pasted) work parenthesised; expressions too
+      out = this._box(await this._evalRaw(wrap(src), { awaitPromise: true, timeout }));
+    } catch (e) {
+      if (!/SyntaxError/.test(e.message)) throw e;
+      // not an expression: fall back to a raw evaluation, which handles statements
+      // (`var a = 1; a + 1`) and returns the last value, exactly like before
+      out = this._box(await this._evalRaw(src, { awaitPromise: true, timeout }));
+    }
+    if (!out || typeof out !== 'object') return out;
+    if (out.__vx === 'undefined') return undefined;
+    if (out.__vx === 'null') return null;
+    if (out.__vx === 'value') return out.v;
+    if (out.__vx === 'error') throw new Error(`page.eval(): ${out.msg}`);
+    if (out.__vx === 'json') return JSON.parse(out.json);
+    return out;
+  }
+
+  /**
+   * Normalise a raw evaluation result. A function value means the caller pasted a
+   * function: call it rather than returning a useless `{}`. Anything else that came
+   * back as an empty object from a non-object source is reported instead of hidden.
+   */
+  _box(v) { return v && typeof v === 'object' && '__vx' in v ? v : { __vx: 'value', v }; }
+
+  /** Raw Runtime.evaluate with the engine auto-heal. */
+  async _evalRaw(expression, { awaitPromise = true, timeout } = {}) {
     try {
       const { result, exceptionDetails } = await this.session.send('Runtime.evaluate', {
-        expression: js, returnByValue: true, awaitPromise,
+        expression, returnByValue: true, awaitPromise,
       }, ...(timeout ? [{ timeout }] : []));
       if (exceptionDetails) throw new Error(`Eval error: ${exceptionDetails.exception?.description || exceptionDetails.text}`);
       return result?.value;
     } catch (e) {
       // auto-heal: page raced past engine injection — install it and retry once
-      if (/__vlx/.test(js) && /is not defined|Can't find variable/.test(e.message)) {
+      if (/__vlx/.test(expression) && /is not defined|Can't find variable/.test(e.message)) {
         await this.session.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
         const { result, exceptionDetails } = await this.session.send('Runtime.evaluate', {
-          expression: js, returnByValue: true, awaitPromise,
+          expression, returnByValue: true, awaitPromise,
         });
         if (exceptionDetails) throw new Error(`Eval error: ${exceptionDetails.exception?.description || exceptionDetails.text}`);
         return result?.value;
@@ -482,11 +576,18 @@ export class VeloxPage extends Emitter {
       throw e;
     }
   }
+
   /** Alias matching Playwright's name. */
   evaluate(jsOrFn, arg, opts) { return this.eval(jsOrFn, arg, opts); }
 
   /** Sync evaluation — every __vlx data function is synchronous, so skip promise awaiting. */
   evalSync(js) { return this.eval(js, undefined, { awaitPromise: false }); }
+
+  /** Playwright-compatible alias: waitForLoadState('load'|'domcontentloaded'|'networkidle') */
+  waitForLoadState(state = 'load', timeout = 30000) {
+    const map = { domcontentloaded: 'interactive', domcontentloaded_interactive: 'interactive', load: 'load', networkidle: 'networkidle', 'network-idle': 'networkidle' };
+    return this.waitForLoad(map[String(state).toLowerCase()] || state, timeout);
+  }
 
   /** Evaluate and return a remote-object handle instead of a value. */
   async evaluateHandle(jsOrFn, arg) {
@@ -1071,8 +1172,19 @@ export class VeloxPage extends Emitter {
   /* ------------------------------------------- cookies & storage ----------------------------------------- */
 
   async cookies(urls) {
-    const target = urls ? [].concat(urls) : (/^https?:/.test(this._url) ? [this._url] : undefined);
-    return (await this.session.send('Network.getCookies', target ? { urls: target } : {})).cookies;
+    const pageUrl = this._url && /^https?:/.test(this._url) ? this._url : null;
+    const target = urls ? [].concat(urls) : (pageUrl ? [pageUrl] : undefined);
+    const cookies = (await this.session.send('Network.getCookies', target ? { urls: target } : {})).cookies;
+    if (cookies.length || !pageUrl) return cookies;
+    // A targeted query right after a navigation can come back empty (e.g. before the
+    // page's first request registers). Fall back to the whole jar, filtered by site —
+    // returning [] here is a classic footgun.
+    const all = await this.session.send('Storage.getCookies', {}).then((r) => r.cookies, () => []);
+    const host = new URL(pageUrl).hostname.replace(/^www\./, '');
+    return all.filter((c) => {
+      const d = String(c.domain || '').replace(/^\./, '').replace(/^www\./, '');
+      return d === host || host.endsWith('.' + d) || d.endsWith('.' + host);
+    });
   }
   async setCookies(cookies) {
     const list = [].concat(cookies).map((c) => ({ ...c, url: c.url || (c.domain ? undefined : this._url) }));
@@ -1457,10 +1569,15 @@ export class VeloxPage extends Emitter {
     const pred = toMatcher(match);
     return this.waitForEvent('request', { predicate: (e) => pred(e.url), timeout });
   }
-  /** Wait for a response matching url (string/regex/predicate) → request entry (with .response). */
-  waitForResponse(match, { timeout = 30000 } = {}) {
+  /**
+   * Wait for a response matching url/regex/predicate. Resolves with a response object:
+   *   const r = await page.waitForResponse(/checkout\/.*\/pay/);
+   *   await r.json() / await r.text() / r.status / r.headers / r.entry
+   */
+  async waitForResponse(match, { timeout = 30000 } = {}) {
     const pred = toMatcher(match);
-    return this.waitForEvent('response', { predicate: (e) => pred(e.url), timeout });
+    const entry = await this.waitForEvent('response', { predicate: (e) => pred(e.url), timeout });
+    return asResponse(entry, this);
   }
   waitForRequestFinished(match, { timeout = 30000 } = {}) {
     const pred = toMatcher(match);

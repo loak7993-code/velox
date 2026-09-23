@@ -17,6 +17,8 @@ import { expect } from './assert.js';
 import { createRequire } from 'node:module';
 const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
+import { proxyForward } from './forward.js';
+import { importSession, exportSession, normalizeCookies, parseCurlCookies, parseNetscapeCookies, importHAR } from './field.js';
 import { middleware, registerCommand, registerSelectorEngine, hook, registered as registeredExtensions, bindPrototypes } from './extend.js';
 import { PROFILES as STEALTH_PROFILES, GEO as STEALTH_GEO } from './cdp/stealth.js';
 import { detect as detectChallenge, engage as engageChallenge, goto as gotoChallenge, VENDORS as CHALLENGE_VENDORS } from './challenge.js';
@@ -76,6 +78,22 @@ const velox = {
   middleware,
   /** Add your own methods: velox.registerCommand('name', fn) */
   registerCommand,
+  /**
+   * Local forwarder for authenticated upstream proxies (the reliable path when CDP
+   * proxy auth fails). Returns { server } for launch()/newContext().
+   */
+  proxyForward,
+  /**
+   * Session plumbing for hybrid HTTP+browser pipelines:
+   *   velox.importSession(cookiesOrCurlOrHar)   // applies to the NEXT page/context
+   *   await page.exportSession()                // Playwright-compatible storage state
+   */
+  importSession,
+  exportSession,
+  normalizeCookies,
+  parseCurlCookies,
+  parseNetscapeCookies,
+  importHAR,
   /** Global selector engines: velox.registerSelectorEngine('name', fn) */
   registerSelectorEngine,
   /** Lifecycle hooks: velox.hook('onNavigation', fn) */
@@ -104,7 +122,8 @@ export {
   open, scrape, launch, launchPersistentContext, connect, discoverBrowsers, Pool, DEVICES,
   Browser, VeloxPage, BrowserContext, Locator, JSHandle, ElementHandle, LiteSession, BrowserSession,
   WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, createCache, HttpCache, expect,
-  ProxyPool, checkProxy, normalizeProxy, proxyFlags,
+  ProxyPool, checkProxy, normalizeProxy, proxyFlags, proxyForward,
+  importSession, exportSession, normalizeCookies, parseCurlCookies, parseNetscapeCookies, importHAR,
   config, getConfig, use, registerDevice, registeredDevices, pluginPresets as plugins,
   middleware, registerCommand, registerSelectorEngine, hook, registeredExtensions,
   STEALTH_PROFILES, STEALTH_GEO, detectChallenge, engageChallenge, gotoChallenge, CHALLENGE_VENDORS,

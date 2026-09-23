@@ -8,6 +8,7 @@ import { findBrowser, discoverBrowsers } from './discovery.js';
 import { VeloxPage } from './page.js';
 import { BrowserContext } from './context.js';
 import { proxyFlags, normalizeProxy } from '../proxy.js';
+import { proxyForward } from '../forward.js';
 import { getConfig, applyLaunchOptions, runHook, hasHook } from '../plugins.js';
 import { applyExtensions } from '../extend.js';
 import { Emitter } from '../util.js';
@@ -267,6 +268,14 @@ export class Browser extends Emitter {
       env = {}, stealth = false, defaultContext,
     } = opts;
 
+    // an authenticated proxy can be fronted by a local forwarder: the browser then gets a
+    // credential-free localhost proxy, which is reliable where CDP proxy auth is not
+    let effectiveProxy = proxy;
+    if (proxy && (proxy.forward === true || (opts.proxyForward === true && proxy.username))) {
+      const fwd = await proxyForward(proxy);
+      opts = { ...opts, _forwarder: fwd, proxy: { server: fwd.server } };
+      effectiveProxy = { server: fwd.server };
+    }
     const exe = executablePath || findBrowser(browser);
     const isShell = /headless-shell/i.test(exe);
     const root = typeof process.getuid === 'function' && process.getuid() === 0;
@@ -291,7 +300,7 @@ export class Browser extends Emitter {
       ...(HEADLESS_OK(exe) && headless ? ['--headless=new'] : []),
       // a real window is never smaller than the viewport; detectors check outer >= inner
       `--window-size=${(opts.windowSize || [1280, 900])[0]},${(opts.windowSize || [1280, 900])[1]}`,
-      ...(proxy ? proxyFlags(proxy) : []),
+      ...(effectiveProxy ? proxyFlags(effectiveProxy) : []),
       ...args,
     ])];
 
@@ -324,9 +333,10 @@ export class Browser extends Emitter {
       conn = await CdpConnection.connect(wsUrl);
     }
     const b = new Browser(conn, proc, { ...opts, _userDataDir: userDataDir ? null : dir });
+    if (opts._forwarder) { b.forwarder = opts._forwarder; b.once('close', () => opts._forwarder.close()); }
     try { b.versionInfo = await conn.send('Browser.getVersion'); } catch {}
     // proxy credentials live on the browser so every page can answer 407 challenges
-    if (proxy) b.proxy = normalizeProxy(proxy);
+    if (effectiveProxy) b.proxy = normalizeProxy(effectiveProxy);
     if (stealth || defaultContext) { /* handled per-page */ }
     proc.once('exit', () => { b._closed = true; b.emit('disconnect'); });
     return b;
@@ -508,6 +518,7 @@ export class Browser extends Emitter {
   async close() {
     if (this._closed) return;
     this._closed = true;
+    if (this.forwarder) this.forwarder.close().catch(() => {});
     this._closingRemote = true;   // a deliberate close must not trigger auto-reconnect
     this._spares = [];
     try { await Promise.race([this.conn.send('Browser.close'), new Promise((r) => setTimeout(r, 3000))]); } catch {}

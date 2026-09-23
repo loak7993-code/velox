@@ -7,6 +7,7 @@ const suites = [
   ['bandwidth', 'test/bandwidth.js'],
   ['plugins + stability', 'test/features.js'],
   ['stealth + challenges + extensibility', 'test/stealth.js'],
+  ['field feedback', 'test/field.js'],
   ['smoke (cdp core)', 'test/smoke.js'],
   ['lite + auto engine', 'test/lite.js'],
   ['pool', 'test/pool.js'],

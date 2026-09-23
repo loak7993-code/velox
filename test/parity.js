@@ -175,7 +175,9 @@ await soft('waitForRequest/waitForResponse', async () => {
   await p.goto(`${S}/`, { waitUntil: 'interactive' });
   const req = await reqP; const rres = await resP;
   check('waitForRequest', req.url.includes('/api/data.json'));
-  check('waitForResponse status', rres.response?.status === 200);
+  check('waitForResponse gives a usable response object', rres.status === 200 && typeof rres.json === 'function', JSON.stringify({ status: rres.status, json: typeof rres.json }));
+  const body = await rres.json();
+  check('waitForResponse body is one await away', body && body.hello === 'world', JSON.stringify(body));
   return true;
 });
 await soft('route.fetch passthrough', async () => {

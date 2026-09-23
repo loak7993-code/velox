@@ -27,6 +27,7 @@ function parse(args) {
     else if (a === '--sel' || a === '--wait' || a === '--recipe' || a === '--engine' || a === '--browser' || a === '--device' || a === '--ua' || a === '--proxy' || a === '--timeout' || a === '--viewport' || a === '--format' || a === '--load-session') out[a.slice(2)] = args[++i];
     else if (a === '--header') { const [k, v] = (args[++i] || '').split(/:(.*)/); out.headers[(k || '').trim()] = (v || '').trim(); }
     else if (a === '--proxy-auth') { const [u, p] = (args[++i] || '').split(':'); out.proxyAuth = { username: u, password: p || '' }; }
+    else if (a === '--proxy-fallback') out.proxyFallback = true;
     else if (a === '--retries' || a === '--config' || a === '--bandwidth' || a === '--max-bytes' || a === '--cache-dir' || a === '--cache-ttl') out[a.slice(2).replace(/-([a-z])/g, (m, ch) => ch.toUpperCase())] = args[++i];
     else if (a === '--cookie') out.cookies.push(args[++i]);
     else if (a.startsWith('-')) { /* ignore */ }
@@ -48,7 +49,7 @@ async function openOpts(flags) {
     stealth: flags.stealth, ads: flags.ads,
     headless: flags.headless !== false,
     ua: flags.ua, device: flags.device, locale: flags.locale, timezone: flags.tz,
-    proxy: flags.proxy ? { server: flags.proxy, ...(flags.proxyAuth || {}) } : undefined,
+    proxy: flags.proxy ? { server: flags.proxy, ...(flags.proxyAuth || {}), ...(flags.proxyFallback ? { forward: true } : {}) } : undefined,
     retries: flags.retries ? +flags.retries : undefined,
     bandwidth: flags.bandwidth ? (/^\d+$/.test(flags.bandwidth) ? { maxBytes: +flags.bandwidth } : flags.bandwidth) : (flags.maxBytes ? { maxBytes: +flags.maxBytes } : undefined),
     headers: Object.keys(flags.headers).length ? flags.headers : undefined,
@@ -85,6 +86,8 @@ Options:
   --ua, --locale, --tz         overrides
   --proxy <server>             proxy server (http://, https://, socks5://; creds inline or --proxy-auth)
   --proxy-auth user:pass       proxy credentials (alternative to inline creds)
+  --proxy-fallback             route an authenticated proxy through a local forwarder
+                               (reliable where browsers mishandle CDP proxy auth)
   --retries <n>                retry transient failures n times
   --bandwidth full|lean|minimal|text-only   block resources you don't need (see README)
   --max-bytes <n>              abort response bodies larger than n bytes

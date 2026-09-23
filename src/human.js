@@ -156,6 +156,48 @@ export class HumanBehaviour {
     return this;
   }
 
+  /**
+   * Press and hold with tremor — for canvas/hold challenges (PerimeterX style).
+   * A perfectly regular hold fails behavioural validation, so the duration, the
+   * micro-movements and their intervals are all irregular.
+   */
+  async hold(sel, { ms = 10000, jitter = 2.2, microMoves = 8, button = 'left' } = {}) {
+    const p = typeof sel === 'string' ? await this.page.eval(`__vlx.point(${JSON.stringify(sel)})`) : sel;
+    if (!p) throw new Error('human.hold: target not found');
+    await this.moveTo(p.x, p.y);
+    await this._pause(60, 200);
+    await this.page.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: p.x, y: p.y, button, clickCount: 1 });
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      // micro-movements with irregular spacing + tremor, never a fixed cadence
+      const jx = p.x + (this.rand() - 0.5) * this._j(jitter);
+      const jy = p.y + (this.rand() - 0.5) * this._j(jitter);
+      await this.page.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: jx, y: jy, button });
+      if (this.rand() < 0.25) await this._pause(90, 260);       // an occasional longer beat
+      await this._pause(Math.max(20, ms / microMoves / 6), Math.max(60, ms / microMoves / 2));
+    }
+    await this.page.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: p.x, y: p.y, button, clickCount: 1 });
+    return this.page;
+  }
+
+  /**
+   * Make a fresh session look alive before the first real interaction: a few natural
+   * cursor moves, an optional scroll, then an idle dwell.
+   */
+  async warmup({ mouse = 3, scroll = 1, dwellMs = 900 } = {}) {
+    const vp = await this.page.eval('[innerWidth, innerHeight]').catch(() => [1280, 720]);
+    for (let i = 0; i < mouse; i++) {
+      await this.moveTo(Math.round(vp[0] * this._r(0.15, 0.85)), Math.round(vp[1] * this._r(0.15, 0.8)));
+      await this._pause(120, 480);
+    }
+    for (let i = 0; i < scroll; i++) {
+      await this.scroll({ by: Math.round(this._r(120, 400)) });
+      await this._pause(200, 700);
+    }
+    if (dwellMs) await this.idle(dwellMs);
+    return this.page;
+  }
+
   /** A believable reading beat for a page whose text you just loaded. */
   async readText(sel, { wpm = 220 } = {}) {
     const text = await this.page.text(sel).catch(() => '');

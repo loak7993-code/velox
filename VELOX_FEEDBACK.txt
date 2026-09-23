@@ -1,0 +1,208 @@
+════════════════════════════════════════════════════════════════════════════
+  VELOX — FIELD FEEDBACK
+  From ~10 hours of real adversarial use (Cloudflare/Amazon/Bright Data flows)
+  Date: 2026-09-23
+════════════════════════════════════════════════════════════════════════════
+
+Context: I drove velox hard all day as the browser layer of a hybrid
+Python(HTTP) + Node(browser) pipeline against anti-bot-heavy targets
+(Amazon signup/checkout, Bright Data signup w/ Cloudflare Turnstile,
+Arkose/AWS-WAF/AAMATION captcha flows). Everything below is something
+I actually hit, not theoretical. Ordered by how much time it cost.
+
+Ratings: [WALL] = blocked me cold  [PAIN] = repeated manual workaround
+         [NICE] = polish
+
+
+════════════════════════════════════════════════════════════════════════════
+BLOCKERS — these cost hours
+════════════════════════════════════════════════════════════════════════════
+
+── 1. page.eval() return serialization  ───────────────────────────── [WALL]
+   Every object / array / function-form eval returned {}:
+
+     await page.eval(`() => document.body.innerText`)     // {}
+     await page.eval(`() => document.scripts.length`)     // {}
+     await page.eval('Object.keys(window.turnstile)')     // {}
+     await page.eval('navigator.userAgent')               // "Mozilla/..."  (works)
+
+   Primitives work; everything else silently empties. This is the worst kind
+   of failure: it looks like "the page is empty" when actually the plumbing
+   dropped the value — I spent a long time chasing phantom page states.
+
+   Fix:
+     - always pass returnByValue: true
+     - JSON round-trip (JSON.stringify in-page) for objects/arrays
+     - if a value CANNOT serialize → return an Error/string explaining why
+       NEVER return a silent {} — that is indistinguishable from real data
+     - accept both string expression AND function forms reliably
+
+── 2. page.waitForLoadState() missing  ─────────────────────────────── [WALL]
+   velox advertises Playwright parity; this call (in half the snippets
+   people paste) throws "not a function":
+     await page.waitForLoadState('settle')   // TypeError
+   goto({waitUntil:'settle'}) works, the standalone doesn't.
+   Fix: alias waitForLoad(state) as waitForLoadState(state).
+
+── 3. Proxy auth unreliable through CDP  ───────────────────────────── [WALL]
+   _proxyAuth enables Fetch on the ROOT session and waits for
+   Fetch.authRequired. With an authenticated upstream proxy
+   (brd.superproxy-style, user:pass), NONE of these got through:
+     - bundled chrome-headless-shell
+     - playwright chromium
+     - snap chromium
+   I burned ~40 min and ended up writing a local auth-injecting forwarder
+   (browser -> 127.0.0.1:8877 -> upstream with Proxy-Authorization) and
+   pointing --proxy-server at 127.0.0.1. That worked instantly.
+
+   Fix (any of):
+     a) attach Fetch.enable({handleAuthRequests:true}) per TARGET
+        (browser conn AND each page/context), each with its own authRequired
+        handler — root-only misses page-scoped events
+     b) ALSO handle Network.authRequired as a fallback path
+     c) ship a first-class escape hatch:
+          const px = await velox.proxyForward({
+            server:'http://geo.iproyal.com:12321',
+            username:'...', password:'...'
+          });
+          // px = { server:'http://127.0.0.1:PORT' }  (no auth)
+          velox.launch({ proxy: px })
+     d) CLI: vlx open URL --proxy socks5://u:p@h:port --proxy-fallback
+
+
+════════════════════════════════════════════════════════════════════════════
+HIGH-VALUE — I wrote these loops 4+ times today
+════════════════════════════════════════════════════════════════════════════
+
+── 4. waitForCaptchaToken()  ───────────────────────────────────────── [PAIN]
+   The single most repeated block of my day (Turnstile, Arkose, WAF grid) —
+   all just "wait for a hidden field to populate":
+
+     const token = await page.waitForCaptchaToken(
+       'input[name="cf-turnstile-response"]',
+       { timeout: 60000 }
+     );
+
+   Should:
+     - detect widget rendered vs container-but-empty vs script-never-loaded
+     - retry/poll internally
+     - on timeout, report WHICH state it died in (vs silent null)
+   It does NOT solve the puzzle — it removes the boilerplate around it.
+
+── 5. page.detectChallenge()  ──────────────────────────────────────── [PAIN]
+   Returns structured info about whatever anti-bot widget is present:
+
+     { type: 'turnstile'|'recaptcha'|'arkose'|'awswaf-grid'|'px'|null,
+       sitekey, iframeUrl, containerId, visible }
+
+   I spelunked iframe src attributes and container ids ~30 times today.
+   IMPORTANT: container ids were DYNAMIC (e.g.
+   `turnstile_container_6243920994991472`) — so match by prefix
+   (`[id^=turnstile_container]`), don't expect a fixed id.
+
+── 6. waitForResponse() with a real response object  ───────────────── [PAIN]
+   The on('response') event gives status/url, but getting the BODY was an
+   awkward separate fetch and the payload shape was inconsistent
+   (e.body vs e.response vs a promise).
+
+     const resp = await page.waitForResponse(/checkout\/.*\/pay/);
+     const json = await resp.json();      // or .text()
+
+   Plus a collector:
+     const xhr = page.netlog(e => /api|checkout|auth/.test(e.url))
+     // -> [{ method, status, url, postData, json(), text() }] lazy bodies
+
+   I hand-rolled URL-keyword filters all day; this is a 10x ergonomics win.
+
+── 7. Session import/export with domain normalization  ─────────────── [PAIN]
+   My actual real-world pattern was HYBRID: Python/curl does the auth-heavy
+   work, the browser takes over for the JS-only parts. I hand-rolled cookie
+   import 4 times and hit the SAME bug every time — domain mismatch
+   (`amazon.com` cookie set against `.amazon.com` request → silently dropped).
+
+     await velox.importSession(cookieArray)
+     const state = await velox.exportSession()
+     // storageState-compatible, normalizes leading dots, dedupes, sets paths
+
+   Bonus:
+     velox.importCurl('cookie: a=b; c=d')       // paste a curl cookie header
+     velox.importHAR('capture.har', { urlFilter })
+   Cookie hand-off is THE thing for HTTP+browser hybrids.
+
+── 8. page.debugDump(dir)  ─────────────────────────────────────────── [PAIN]
+   One call → DOM html, network log, console, pageerror, screenshot,
+   cookies + storage. Saves the exact state needed to diagnose.
+   I wrote ~10 bespoke versions of this today. Turns "it didn't work"
+   into "here's precisely why" in one shot.
+
+── 9. page.gotoWithRetry(url, {retries, backoff, onAttempt})  ──────── [PAIN]
+   Flaky residential proxies are the NORMAL case, not the exception
+   (I hit dozens of 504s, SSL resets, ERR_TUNNEL_CONNECTION_FAILED today).
+   A built-in retry wrapper with backoff would remove most outer
+   try/except noise from user code.
+
+
+════════════════════════════════════════════════════════════════════════════
+ANTI-BOT / BEHAVIORAL — velox's stated use case, missing the last 10%
+════════════════════════════════════════════════════════════════════════════
+
+── 10. page.warmup({ mouse, scroll, dwellMs })  ────────────────────── [NICE]
+    You already have humanMove/human typing. Compose them into a one-liner
+    that makes a fresh session look alive before the first interaction:
+    natural bezier cursor moves, 1-2 scrolls, idle dwell.
+    This is the single highest-leverage anti-bot helper you don't have yet.
+
+── 11. humanHold(el, { ms, jitter, microMoves })  ──────────────────── [NICE]
+    From the PerimeterX press-and-hold work (Walmart): synthetic hold events
+    failed behavioral validation because they were perfectly regular
+    (fixed intervals, zero tremor). A hold helper that injects human-ish
+    timing jitter + micro-movements during the hold would legitimately help
+    canvas/hold challenges.
+
+── 12. page.cdp(domain.method, params) shorthand  ──────────────────── [NICE]
+    createCDPSession() exists, but a one-liner passthrough saves the
+    boilerplate every time raw CDP is needed (I used it for cookie dumping,
+    network blocking, etc.).
+
+
+════════════════════════════════════════════════════════════════════════════
+POLISH
+════════════════════════════════════════════════════════════════════════════
+
+── 13. page.cookies() should default to the current page URL  ──────── [NICE]
+    Mine returned [] right after navigation, then worked later.
+    Playwright also requires a url arg, but a sane default (current
+    page origin) removes a confusing footgun.
+
+── 14. Type the event payloads in the .d.ts  ───────────────────────── [NICE]
+    I was guessing at e.body vs e.response vs promises on
+    console/pageerror/response events all day. Explicit interfaces.
+
+── 15. CLI: --proxy-fallback  ──────────────────────────────────────── [NICE]
+    Because the CLI already advertises --proxy socks5://u:p@h:port,
+    make it "just work" via the internal forwarder when the CDP auth
+    path fails.
+
+── 16. Document eval/extract quirks  ───────────────────────────────── [NICE]
+    extract() worked great (html:true, attrs:[...]) — lean on it in docs
+    as the preferred data path given eval's rough edges (see #1).
+
+
+════════════════════════════════════════════════════════════════════════════
+IF YOU ONLY FIX 3 THINGS
+════════════════════════════════════════════════════════════════════════════
+
+  1) page.eval() return serialization          (silent {} is lethal)
+  2) proxy auth reliability + proxyForward()   (authenticated proxies
+                                                are table stakes)
+  3) waitForCaptchaToken() + detectChallenge() (the repeated boilerplate
+                                                in every anti-bot flow)
+
+Those three were the actual walls today. Everything else is comfort/ergonomics.
+
+All three (1)(2)(3) are small, contained diffs:
+  - (1) src/cdp/page.js        eval() → returnByValue + JSON round-trip
+  - (2) src/cdp/browser.js     _proxyAuth per-target + forwarder helper
+  - (3) src/cdp/page.js        two new helpers (~60 lines total)
+
+════════════════════════════════════════════════════════════════════════════
