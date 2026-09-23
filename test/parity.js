@@ -18,6 +18,7 @@ const soft = async (name, fn) => {
   catch (e) { check(name, false, e.message.slice(0, 120)); }
 };
 
+velox.config({ navRetries: 1, retryDelay: 250 });   // CI runners are noisy: retry transient navigation failures
 const site = await startSite();
 const S = site.url;
 

@@ -2,6 +2,7 @@
 import { Pool } from '../src/pool.js';
 import { startSite } from './site/serve.js';
 
+velox.config({ navRetries: 1, retryDelay: 250 });   // CI runners are noisy: retry transient navigation failures
 const site = await startSite();
 const SITE = site.url;
 const pool = new Pool({

@@ -326,7 +326,27 @@ export class VeloxPage extends Emitter {
 
   /* ---------------------------------------------- navigation --------------------------------------------- */
 
-  async goto(url, { waitUntil = 'interactive', timeout, referer } = {}) {
+  /**
+   * Navigate. Transient failures (timeouts, dropped connections, DNS blips) are
+   * retried when `retries` is passed or `config.navRetries` is set.
+   */
+  async goto(url, opts = {}) {
+    const cfg = getConfig();
+    const tries = Math.max(1, (opts.retries ?? cfg.navRetries ?? 0) + 1);
+    let lastErr;
+    for (let i = 1; i <= tries; i++) {
+      try { return await this._gotoOnce(url, opts); }
+      catch (e) {
+        lastErr = e;
+        const transient = /timeout|ERR_|ECONN|closed|Target closed|Navigation/i.test(e.message || '');
+        if (i === tries || !transient) throw e;
+        await sleep((cfg.retryDelay ?? 300) * i);
+      }
+    }
+    throw lastErr;
+  }
+
+  async _gotoOnce(url, { waitUntil = 'interactive', timeout, referer } = {}) {
     timeout = timeout ?? getConfig().navTimeout;
     if (this._baseURL && !/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = new URL(url, this._baseURL).href;
     else if (!/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = 'https://' + url;

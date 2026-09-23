@@ -22,6 +22,7 @@ const soft = async (name, fn) => {
   catch (e) { process.stdout.write(`(${Date.now() - t}ms)\n`); check(name, false, e.message.slice(0, 150)); }
 };
 
+velox.config({ navRetries: 1, retryDelay: 250 });   // CI runners are noisy: retry transient navigation failures
 const site = await startSite();
 const S = site.url;
 

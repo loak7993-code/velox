@@ -400,6 +400,20 @@ export class Browser extends Emitter {
       warm = this._spares.pop() || null;
     }
     if (warm) {
+      // A background-created page must prove it is responsive before we hand it over:
+      // under load a renderer can be slow or wedged, and a one-round-trip probe is far
+      // cheaper than the caller discovering it. Failing the probe falls back to a
+      // normal (cold) page, so correctness never depends on the spare being good.
+      const healthy = await Promise.race([
+        warm.session.send('Runtime.evaluate', { expression: '1', returnByValue: true }, { timeout: 2500 }).then(() => true, () => false),
+        new Promise((r) => setTimeout(() => r(false), 3000)),
+      ]);
+      if (!healthy) {
+        warm.close().catch(() => {});
+        warm = null;
+      }
+    }
+    if (warm) {
       warm._spare = false;
       ctx._pages.add(warm);
       warm.context = ctx;
