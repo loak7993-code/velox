@@ -309,7 +309,7 @@ Everything below is measured by `npm run speed` (same machine, medians):
 
 | | before | v2.3 | |
 |---|---:|---:|---:|
-| `newPage()` | 29 ms | **2 ms** | **14.5×** — a spare renderer is kept warm and adopted |
+| `newPage()` (with `spare: 2`) | 29 ms | **2 ms** | **14.5×** — opt-in warm renderers |
 | `launch()` handoff (prewarmed) | 64 ms | **~0 ms** | `velox.prewarm()` keeps browsers ready |
 | 4 data actions | 2 ms | **1 ms** | 2× — `page.batch()` flies them in one flush |
 | 24 latency-bound pages | 749 ms | **73 ms** | **10.3×** — `fetchAll()`, no browser at all |
@@ -323,7 +323,8 @@ await velox.prewarm({ browsers: 1, pagesPerBrowser: 6 });
 const browser = await velox.launch();      // hands back the warm browser instantly
 const page = await browser.newPage();      // ~2 ms — a blank renderer was waiting
 
-// per-browser control (on by default; spare: 0 disables)
+// per-browser control — opt-in, because background renderers can misbehave on
+// constrained runners; the default path stays maximally predictable
 await velox.launch({ spare: 4 });          // keep 4 warm renderers for bursts
 ```
 

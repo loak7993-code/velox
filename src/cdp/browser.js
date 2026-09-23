@@ -33,7 +33,11 @@ export class Browser extends Emitter {
     conn.on('disconnect', (e) => this.emit('disconnect', e));
     // keep one blank renderer warm so newPage() skips renderer spin-up (~30ms → ~4ms)
     this._spares = [];
-    this._spareTarget = opts.spare ?? 2;
+    // Opt-in. Warm spares make newPage() ~2 ms, but background renderers proved to be a
+    // source of flakiness on constrained runners (occasional stuck first navigation), so
+    // the default is the rock-solid explicit path. Enable with `spare: n`, or pre-build
+    // with velox.prewarm()/browser.prewarm(n) where you want the fast path.
+    this._spareTarget = opts.spare ?? 0;
     if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
   }
 

@@ -25,12 +25,12 @@ const row = (label, before, after, note = '') => {
     await p.close(); await b.close();
   }
   for (let i = 0; i < N; i++) {
-    const b = await velox.launch({ executablePath: EXE });              // spare on (default)
-    await new Promise((r) => setTimeout(r, 60));                        // let it warm
+    const b = await velox.launch({ executablePath: EXE, spare: 2 });     // opt-in warm renderers
+    await new Promise((r) => setTimeout(r, 80));                        // let them warm
     let t = Date.now(); const p = await b.newPage({ capture: false }); after.push(Date.now() - t);
     await p.close(); await b.close();
   }
-  row('newPage()', before, after, 'spare renderer, transparent');
+  row('newPage() (spare: 2)', before, after, 'opt-in warm renderers');
 }
 
 /* ── 2. launch: cold vs prewarmed ────────────────────────────────────────── */
@@ -139,7 +139,7 @@ const row = (label, before, after, note = '') => {
   }
   await b1.close();
   const fast = [];
-  const b2 = await velox.launch({ executablePath: EXE });
+  const b2 = await velox.launch({ executablePath: EXE, spare: 2 });
   for (let i = 0; i < 12; i++) {
     const t = Date.now();
     const p = await b2.newPage({ capture: false });
@@ -150,7 +150,7 @@ const row = (label, before, after, note = '') => {
     fast.push(Date.now() - t);
   }
   await b2.close();
-  row('12 pages: open→navigate→read', slow, fast, 'spare renderers');
+  row('12 pages: open→navigate→read', slow, fast, 'warm renderers (opt-in)');
 }
 
 await site.server.close();

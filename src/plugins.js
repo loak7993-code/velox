@@ -18,7 +18,8 @@ const state = {
     timeout: 15000,        // default per-action timeout
     navTimeout: 30000,     // default navigation timeout
     engine: 'auto',
-    retries: 0,
+    retries: 0,          // retries for velox.open()
+    navRetries: 1,       // retries for page.goto() on TRANSIENT failures only
     retryDelay: 300,
     headless: true,
     stealth: false,
