@@ -4,174 +4,333 @@
 
 **Browser automation at terminal velocity.**
 
-Zero dependencies · Any Chromium-family browser · Or no browser at all
+Zero dependencies · Drives the browser you already have · Or no browser at all
 
-`npm i velox` *(Node ≥ 20 — no postinstall, no downloads, nothing bundled)*
+[![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
+[![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
+[![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
+[![license](https://img.shields.io/badge/license-MIT-black)](LICENSE)
+
+**Works with Chrome, Chromium, Edge, Brave, Vivaldi, Opera, chrome-headless-shell —
+or skips the browser entirely when a page doesn't need one.**
 
 </div>
 
 ---
 
-## Why
+## Why velox exists
 
-Every mainstream automation tool drags a browser into your process whether the
-page needs one or not. Velox takes the other road:
+Every mainstream automation stack makes the same two mistakes: it downloads its
+own browser whether you need one or not, and it drags dozens of dependencies
+along for the ride. Velox is a from-scratch rethink (no Playwright/Puppeteer
+code, zero npm dependencies, ~6.5k lines):
 
 | | playwright | puppeteer | **velox** |
-|---|---|---|---|
-| dependencies | 50+ (incl. bundled browser download) | 10+ | **0** |
-| browser required | always | always | **only when the page needs JS** |
-| default transport | pipe | ws | **pipe** (+ ws for remote) |
-| selector round-trips per action | 1–3 | 1–3 | **exactly 1** |
-| batch extract (3 els), median | 27 ms | — | **1 ms** |
-| works with installed browsers | its own only | its own only | **Chrome, Chromium, Edge, Brave, Vivaldi, Opera, chrome-headless-shell…** |
+|---|:---:|:---:|:---:|
+| npm dependencies | 50+ | 10+ | **0** |
+| downloads a browser on install | ~300 MB | ~150 MB | **never** |
+| static pages launch a browser | always | always | **no — pure HTTP (~2 ms)** |
+| works with your installed browsers | its own build only | its own build only | **any CDP browser** |
+| default transport | pipe | websocket | **pipe** (+ ws for remote) |
+| round-trips per selector action | 1–3 | 1–3 | **exactly 1** |
+| batch extract, 3 elements (median) | 26 ms | — | **1 ms** |
+| bundle size | megabytes | megabytes | **~180 KB source** |
 
-Measured on the same binary, same machine, 12 runs — run `npm run bench` yourself.
+The speed comes from architecture, not micro-optimization — see
+[how it works](#how-it-works).
 
-## Install
+---
 
-```bash
-npm i velox          # that's it. no browser download, no postinstall
-```
-
-Velox drives whatever Chromium-family browser is already on the machine
-(`vlx detect` lists what it found), or any remote CDP endpoint, and for pages
-that don't need JavaScript it doesn't start a browser at all.
-
-## The 30-second tour
+## The 60-second tour
 
 ```js
 import velox from 'velox';
 
-// ── auto engine: pure HTTP for static pages, browser only when JS is needed
+// ① Open a URL. No browser launches unless the page needs JavaScript.
 const page = await velox.open('https://example.com');
-console.log(page.engine);              // 'lite'  ← no browser was launched
-console.log(await page.text('h1'));    // "Example Domain"
 
-// browser-only ops upgrade transparently (cookies carry over)
+console.log(page.engine);            // 'lite' — pure HTTP fetch + our own HTML parser
+console.log(await page.text('h1'));  // "Example Domain"
+
+// ② Browser-only operations escalate transparently (cookies carry over).
 const png = await page.screenshot({ full: true });
-console.log(page.engine);              // 'cdp'   ← browser spun up on demand
+console.log(page.engine);            // 'cdp' — a browser spun up on demand
 await page.close();
 
-// ── full power mode: any installed browser
-const browser = await velox.launch();            // finds Chrome/Edge/Brave/...
+// ③ Full power mode: your installed Chrome/Edge/Brave, full Playwright surface.
+const browser = await velox.launch();            // auto-discovers any CDP browser
 const p = await browser.newPage({ stealth: true, ads: true });
 
 await p.goto('https://news.ycombinator.com');
-const stories = await p.extract('tr.athing', {          // ONE round-trip
-  text: true,
-  attrs: ['id'],
-});
-const titles = await p.texts('.titleline > a');         // one more
+const titles = await p.extract('.titleline > a', { text: true });  // ONE round-trip
+await p.getByRole('link', { name: 'More' }).click();
 await browser.close();
 ```
 
-## Architecture
+## Installation
 
-```
-┌────────────────────────────────────────────────────────┐
-│                      velox.open()                      │
-│                                                        │
-│   engine: auto        engine: lite       engine: cdp   │
-│   ┌───────────┐       ┌───────────┐     ┌───────────┐  │
-│   │ fetch HTML│──static──▶ lite DOM │     │  browser  │  │
-│   │ needs JS? │       │ (own parser)│    │ any CDP   │  │
-│   └────┬──────┘       └───────────┘     │  binary   │  │
-│        │ JS needed / browser op          └────▲──────┘  │
-│        └──────────── escalate ────────────────┘         │
-└────────────────────────────────────────────────────────┘
+```bash
+npm install github:loak7993-code/velox
 ```
 
-**Why it's fast**
+Node ≥ 20 (22+ recommended — uses the native `WebSocket`). No postinstall, no
+browser download. Velox finds what's already on the machine:
 
-1. **In-page engine.** A tiny selector/wait core is injected once per document.
-   Finding, waiting, extracting, scrolling, and click-pointing all run *inside*
-   the page — every action is a single pre-serialized `Runtime.evaluate`, not a
-   protocol conversation.
-2. **MutationObserver waits.** No polling over the wire; elements appear as the
-   DOM mutates. Waiting for a node that shows up after 700 ms: **537 ms vs
-   Playwright's 802 ms**.
-3. **CDP over pipes** (`--remote-debugging-pipe`) by default — lower latency
-   than WebSocket; falls back automatically; `connect()` uses WebSocket for
-   remote endpoints.
-4. **Sync evaluation** for all data reads (`awaitPromise: false` — the engine
-   never returns promises), pipelined domain setup, lazy body fetching.
-5. **The lite engine.** A from-scratch HTTP/1.1 client with keep-alive,
-   gzip/brotli, redirects and a cookie jar, plus a from-scratch HTML parser with
-   a CSS-subset selector engine. Static pages cost **~2 ms and zero
-   megabytes**.
-6. **Browser-native blocking.** `ads: true` maps to
-   `Network.setBlockedURLs` — trackers die inside the network stack, your page
-   loads faster and lighter.
+```bash
+npx vlx detect          # lists every Chromium-family browser it can drive
+```
 
-## Playwright parity
+…or pin one with `VELOX_BROWSER=/path/to/chrome`, the `executablePath` option,
+or connect remote: `velox.connect('ws://browser-host:3000')`.
 
-Everything Playwright can do — mapped to velox (82/82 parity tests green):
+---
+
+## How it works
+
+```
+                        velox.open(url)
+                              │
+              ┌───────────────┴───────────────┐
+              │        engine: 'auto'          │
+              ▼                               ▼
+     ┌─────────────────┐            ┌──────────────────┐
+     │  fetch HTML     │  static?   │   CDP browser    │
+     │  (own HTTP/1.1, │───────────▶│ any binary,      │
+     │  keep-alive,br, │            │ pipe transport   │
+     │  cookie jar)    │  needs JS? │ in-page engine   │
+     └─────────────────┘───────────▶└──────────────────┘
+              ▲                               ▲
+      engine: 'lite'                  engine: 'cdp'
+   (never a browser)          (or forced with --js)
+```
+
+1. **In-page engine.** A ~8 KB selector/wait core is injected once per document.
+   Finding, waiting, extracting, click-pointing — all execute *inside the page*.
+   Every action is exactly one pre-serialized `Runtime.evaluate`. No protocol
+   conversations, no stale handles.
+2. **MutationObserver waits.** Elements resolve the instant the DOM mutates —
+   no polling over the wire. Waiting on a node that appears after 700 ms:
+   **635 ms vs Playwright's 787 ms.**
+3. **CDP over stdio pipes** (`--remote-debugging-pipe`) — lower per-command
+   latency than WebSocket. Automatic fallback; `connect()` uses WebSocket.
+4. **The lite engine.** A from-scratch HTTP client (keep-alive, gzip/brotli,
+   redirects, cookie jar) plus a from-scratch HTML parser with CSS-subset
+   selectors. Static pages cost **~2 ms and zero browser processes**.
+5. **Browser-native blocking.** `ads: true` maps to `Network.setBlockedURLs` —
+   trackers die inside the network stack, pages load lighter and faster.
+6. **Zero handles, zero staleness.** Locators re-resolve on every call —
+   elements are always current, never detached, never leaked.
+
+### Benchmarks
+
+Same binary (chrome-headless-shell 154), same box, 10 runs, medians —
+reproduce with `node test/bench.js 10`:
+
+| operation | velox | playwright-core | |
+|---|---:|---:|:---:|
+| batch extract (3 elements) | **1 ms** | 26 ms | **26×** |
+| second navigation | **13 ms** | 39 ms | **3.0×** |
+| fill + click + submit | **45 ms** | 74 ms | **1.64×** |
+| 10× `title()` | **18 ms** | 24 ms | **1.33×** |
+| waitForSelector (700 ms delay) | **635 ms** | 787 ms | **1.24×** |
+| browser close | **26 ms** | 34 ms | **1.31×** |
+| browser launch | **66 ms** | 70 ms | 1.06× |
+| goto + DOMContentLoaded | **21 ms** | 22 ms | 1.05× |
+| full-page screenshot | 56 ms | **49 ms** | 0.88× |
+| **lite engine** (no browser at all) | **~2 ms/page** | — | — |
+
+---
+
+## Feature tour
+
+### The auto engine
+
+```js
+velox.open(url);                       // auto: HTTP first, browser only if JS is needed
+velox.open(url, { engine: 'lite' });   // never launches a browser
+velox.open(url, { engine: 'cdp' });    // always a browser
+velox.open(url, { js: true });         // force the browser path
+```
+
+Escalation heuristics: SPA shells (`<div id="root">` + scripts, no SSR state),
+challenge pages, empty-body + heavy-script pages, meta-refresh loops. Calling a
+browser-only op (`click`, `screenshot`, `eval`, …) on a lite session upgrades it
+**transparently, with cookie state carried over**.
+
+### Selectors
+
+One syntax everywhere — `page`, locators, `block()`, the CLI:
+
+| selector | matches |
+|---|---|
+| `div.card > a` | plain CSS (default) |
+| `text=Sign in` · `text*=sign` · `text^=Sign` · `text$=in` · `text==Exact` | text (substring CI / anchored / exact) |
+| `role=button` · `role=button@Sign in` · `role=button@=Exact` | ARIA role + accessible name |
+| `label=Email` · `placeholder=Search` · `alt=Logo` · `title=Close` | form labeling semantics |
+| `testid=submit` | `data-testid` (configurable via `testIdAttribute`) |
+| `xpath=//a[@href]` · `id=main` · `tag=div` · `nth=3` | the classics |
+| `#host >> button.cta` | **`>>` pierces shadow roots and same-origin iframes** |
+| `button:visible` · `a:has-text("read more")` | filters |
+
+### Locators — the full Playwright surface
+
+```js
+const btn = p.getByRole('button', { name: 'Subscribe' });
+const row = p.getByTestId('row-7').filter({ hasText: 'velox' });
+
+await btn.click();                       // trusted mouse input, auto-waited
+await p.getByLabel('Email').fill('a@b.c');
+await p.locator('#agree').check();
+await p.locator('#country').selectOption({ label: 'Chile' });
+await p.locator('li').nth(2).dragTo('#bin');
+
+await row.isVisible();                   // …isChecked/isDisabled/isEditable/isHidden
+await row.boundingBox();                 // …text/attr/html/val/count/allTextContents
+await row.ariaSnapshot();                // '- button "Subscribe"'
+```
+
+`first() / last() / nth(i) / filter({hasText, has}) / all() / locator(sel)` —
+every method is one fresh round-trip; nothing goes stale.
+
+### Network
+
+```js
+// capture (headers, POST bodies, timing, IPs, redirect chains)
+p.on('response', (e) => console.log(e.response.status, e.url));
+
+// intercept & mock
+p.route('**/api/**', (req) => req.fulfill({ body: '{"n":42}', contentType: 'application/json' }));
+p.mock('**/stats', { status: 204 });
+
+// inspect-then-modify through the real server
+p.route('**/api/data', async (req) => {
+  const real = await req.fetch();               // server-side fetch w/ page cookies
+  req.fulfill({ body: real.body.replace('world', 'proxied') });
+});
+
+// block at the network stack + HAR export
+await p.block(['doubleclick.net', '*hotjar.com']);
+const har = await p.har({ withBodies: true });
+
+// offline / throttling / basic auth
+await p.setOffline(true);
+await p.emulateNetwork({ latency: 200, downloadThroughput: 1.5 * 1024 * 1024 });
+const ctx = await browser.newContext({ httpCredentials: { username, password } });
+
+// wait for traffic
+const [req] = await Promise.all([p.waitForRequest('**/api/x'), p.click('#go')]);
+```
+
+`page.on('websocket')` tracks WS frames/headers/close; `page.on('worker')` and
+`browser.on('serviceworker')` cover web + service workers.
+
+### Contexts & sessions
+
+```js
+const ctx = await browser.newContext({           // isolated cookie world
+  baseURL: 'https://api.example.com',
+  storageState: 'state.json',                    // Playwright-format state
+  httpCredentials: { username: 'u', password: 'p' },
+  serviceWorkers: 'block', bypassCSP: true,
+  testIdAttribute: 'data-test',
+});
+
+await ctx.storageState('state.json');            // save cookies + localStorage
+const r = await ctx.request.post('/login', { data: { user, pass } });  // shares the cookie jar
+await ctx.close();
+
+// persistent profile: logins & extensions survive restarts
+const profile = await velox.launchPersistentContext('./my-profile');
+```
+
+### Emulation & stealth
+
+```js
+await p.emulate('iphone_15');                    // 10 device presets
+await p.setGeolocation({ latitude: -33.86, longitude: 151.20 });
+await p.emulateMedia({ colorScheme: 'dark', media: 'print' });
+await p.clock.setFixedTime('2024-06-01T10:00:00Z');
+await p.clock.fastForward(60_000);               // virtual timers fire instantly
+
+const s = await b.newPage({ stealth: true });    // webdriver, WebGL, plugins,
+                                                 // chrome.runtime, languages, …
+```
+
+### Capture
+
+```js
+await p.screenshot({ full: true, mask: ['#ad'], animations: 'disabled' });
+await p.pdf({ format: 'A4', margin: { top: 0.5 } });
+await p.video.start({ path: 'rec.gif' });  await p.wait(500);
+const gif = await p.video.stop();                // animated GIF, own encoder
+await p.accessibility.yaml();                    // aria tree
+await p.coverage.startJSCoverage();  /* … */ await p.coverage.stopJSCoverage();
+const ctx2 = b.defaultContext();
+await ctx2.startTracing({ screenshots: true });  // chrome://tracing-loadable
+await ctx2.stopTracing('trace.json');
+```
+
+Video uses a from-scratch pipeline — PNG decode → median-cut palette → LZW —
+because a zero-dependency library shouldn't need ffmpeg.
+
+### Scaling
+
+```js
+const pool = new velox.Pool({ browsers: 4, pagesPerBrowser: 4, pageOpts: { ads: true } });
+const titles = await pool.map(urls, (u, page) =>
+  page.goto(u, { waitUntil: 'interactive' }).then(() => page.title()),
+  { concurrency: 16 });
+await pool.close();
+```
+
+Static pages never touch the pool — the auto engine fetches them in-process.
+
+### Assertions
+
+```js
+import { expect } from 'velox';
+
+await expect(p.getByRole('heading')).toHaveText('Example Domain');
+await expect(p.locator('li')).toHaveCount(3);
+await expect(p).not.toHaveTitle('Wrong');
+// toBeVisible/Hidden/Enabled/Disabled/Checked/Editable,
+// toContainText/toHaveValue/toHaveAttribute/toHaveURL/toHaveCookie
+```
+
+Polling assertions with `.not` — pair them with any test runner.
+
+---
+
+## Coming from Playwright
 
 | Playwright | velox |
 |---|---|
-| `browser.newContext()` | `browser.newContext()` — isolated cookie jars, storageState, baseURL, httpCredentials, serviceWorkers:'block', bypassCSP, offline, permissions, recordVideo |
-| `context.storageState()` | `context.storageState(path)` / `{ storageState }` — same JSON format |
-| `launchPersistentContext()` | `velox.launchPersistentContext(dir, opts)` — real profile, survives restarts |
-| `page.getByRole/Text/Label/Placeholder/AltText/Title/TestId` | identical factories, in-page ARIA matching (`role=`, `label=`, … also usable as raw selectors) |
-| locator: `click/dblclick/tap/hover/focus/blur/type/press/fill/check/uncheck/setChecked/selectOption/selectText/dragTo/scrollIntoViewIfNeeded` | all present |
-| locator: `nth/first/last/filter({hasText,has})/all/allTextContents/boundingBox/ariaSnapshot/elementHandle` | all present |
-| `page.$eval/$eval/evaluateHandle/elementHandles` | present, plus handles support function-form `(el, arg) => …` |
-| `page.waitForRequest/Response/Event/Dialog/Popup/Download/Function/URL/LoadState` | all present, navigation-proof |
-| `page.route()` + `route.fulfill/abort/continue` | present, plus `route.fetch()` (real request server-side) and context-level routing |
-| `page.request` / `playwright.request` | `context.request.get/post/…` — shares the context cookie jar both ways |
-| network: `setOffline`, `emulateNetwork` (latency/throughput), HAR | present |
-| `page.on('websocket')` | present — frames sent/received, headers, close |
-| `page.on('worker')` / service workers | present — page-level auto-attach, `serviceWorkers: 'block'` |
-| `page.addInitScript/addScriptTag/addStyleTag` | present, removable |
-| `page.clock` | present — `install/setFixedTime/advance/fastForward` (virtual timers fire instantly on fastForward) |
-| `page.coverage` | `startJSCoverage/stopJSCoverage` + CSS coverage (Profiler/CSS domains) |
-| `page.accessibility.snapshot()` | present + `accessibility.yaml()` |
-| `context.startTracing/stopTracing` | present — DevTools-loadable `chrome://tracing` JSON (with screenshots) |
-| video recording | `page.video.start()/stop()` → animated **GIF**, encoded by a from-scratch zero-dep encoder (PNG-decode → palette → LZW) |
-| `page.screenshot({ mask, animations })` | present |
-| `expect(locator).toBeVisible/…` | `velox.expect()` — polling assertions (visible/hidden/checked/text/value/count/attr/title/url/cookie + `.not`) |
-| drag & drop | `page.dragAndDrop()`, `locator.dragTo()` |
-| downloads | `page.on('download')` → `{ url, suggestedFilename, path(), saveAs(), cancel(), finished() }` |
-| basic auth | `context.httpCredentials` (also proxy auth at launch) |
-| raw CDP | `page.createCDPSession()` / `context.newCDPSession()` |
-| element handles | `elementHandle()/elementHandles()` + `ElementHandle/JSHandle` classes |
-| Firefox/WebKit engines | **not supported** — they don't speak CDP (this is the one hard gap; use Chrome-family) |
-| test runner / inspector UI | out of scope — velox is the automation library; pair it with any runner |
+| `chromium.launch()` | `velox.launch()` — any installed CDP browser |
+| `browser.newContext()` / options | `browser.newContext()` — same options, plus `engine` |
+| `context.addInitScript`, `exposeBinding` | same names on context |
+| `page.getByRole/Text/Label/…` | identical |
+| `page.locator().click/check/selectOption/…` | identical |
+| `page.route()` + `route.fulfill/abort/continue` | identical, plus `route.fetch()` |
+| `page.request` | `context.request` (shared cookie jar) |
+| `page.waitForRequest/Response/LoadState/URL/Function` | identical |
+| `page.clock` (install/fastForward/…) | identical semantics |
+| `context.storageState()` | identical JSON format — states are portable |
+| `page.screenshot({ mask, animations })` | identical |
+| `launchPersistentContext()` | `velox.launchPersistentContext(dir, opts)` |
+| `page.pdf` / `video` / `coverage` / `accessibility` | identical (video = GIF) |
+| `page.evaluateHandle` / `elementHandle` | identical, plus function-form `evaluate(fn, arg)` |
+| `expect(locator).toBe…` | `velox.expect()` — same shape |
+| Firefox / WebKit engines | ✗ not supported — they don't speak CDP |
+| test runner / trace viewer UI / inspector | ✗ out of scope — use any runner |
 
-## Feature map
-
-**Engines** auto (fetch → escalate) · lite (never launches) · cdp (always browser) · remote `connect('ws://…' | 'host:port')` · browser auto-discovery (Chrome, Chromium, Edge, Brave, Vivaldi, Opera, Thorium, chrome-headless-shell, Linux/macOS/Windows) · `VELOX_BROWSER` env override
-
-**Pages** `goto` with `none / interactive / load / networkidle / settle` · history back/forward · `setContent` · popups (`browser.on('popup')`) · multi-tab · isolated browser contexts · frame tree · same-origin iframe scoping (`page.inFrame('#comments')`) · OOPIF auto-attach
-
-**Selectors** `css` · `text=` `text*=` `text^=` `text$=` (case-insensitive) · `xpath=` · `id=` · `tag=` · `nth=` · `:visible` · `:has-text("…")` · chaining with `>>` pierces **shadow roots and same-origin iframes** · zero-handle Locators (always fresh, never stale) · `extract()` batch: N elements × M fields in **one** round-trip
-
-**Waiting** `waitForSelector` (MutationObserver, navigation-proof) · `waitForFunction` · `waitForUrl` · `waitForLoad` · network-idle with 500 ms quiet window
-
-**Input** trusted mouse (click/dblclick/right/modifiers/wheel) · `humanMove` bezier cursor paths · trusted keyboard with per-char timing and `human` jitter · `fill` fast-path (value + input/change events) · touch tap/swipe · drag via mouse down/move/up · file upload · dialog auto-handling (`accept`/`dismiss`/`promptText`) with listener override
-
-**Network** full request/response capture (headers, POST bodies, timing, IPs, protocol, redirect chains) · lazy body fetch · HAR 1.2 export · `route()` interception with fulfill/abort/continue+override · `mock()` one-liner · `block()` browser-native URL blocking · built-in ad/tracker blocklist (`ads: true`) · extra headers · per-page routes from launch options
-
-**Sessions & storage** cookies get/set/serialize · localStorage + sessionStorage snapshot/restore · `saveSession()/loadSession()` portable JSON sessions · lite→browser cookie hand-off on escalation
-
-**Capture** viewport / full-page / element screenshots (png/jpeg, `fast` mode) · PDF (paper sizes, margins, headers/footers, CSS page size) · `readable()` markdown-ish text extraction · console + page-error logs
-
-**Stealth** (best-effort, injected before page scripts) `navigator.webdriver` · languages · plugins/mimeTypes · `window.chrome.runtime/app/csi/loadTimes` · permissions · WebGL vendor/renderer · hardwareConcurrency/deviceMemory/platform · iframe contentWindow · battery · connection
-
-**Emulation** device presets (`iphone_13/15/se`, `ipad`, `pixel_8`, `galaxy_s24`, `desktop`, `mac`, `bot`) · viewport/DPR/mobile · UA + platform · locale · timezone · geolocation (with permission grant) · color scheme · reduced motion · touch
-
-**Scale** `Pool` — pre-warmed browser/page pool with `use()` and `map(items, fn, {concurrency})` · parallel lite fetches need no pool at all
-
-**Misc** `expose(name, fn)` Node→page bindings · downloads with progress (`allowAndName`) · retries/timeouts/AbortSignal-friendly · TypeScript definitions · ESM
+Migration is mostly find-and-replace; the object model is deliberately aligned.
 
 ## CLI
 
 ```bash
 vlx detect                                # browsers found on this machine
 vlx open  https://example.com             # readable text (auto engine)
-vlx open  example.com --sel 'h2'          # specific elements
-vlx open  example.com --json              # structured
+vlx open  example.com --sel 'h2' --json   # specific elements, structured
 vlx shot  example.com --full -o page.png  # full-page screenshot
 vlx shot  example.com --sel '#chart' -o c.png
 vlx pdf   example.com -o page.pdf
@@ -180,98 +339,146 @@ vlx scrape example.com --recipe tables --json
 vlx eval  example.com "document.title"
 vlx save-session example.com s.json       # cookies + storage
 vlx load-session example.com s.json
-vlx bench example.com                     # lite vs browser timings
+vlx bench  example.com                    # lite vs browser timings
 
-# flags: --engine auto|lite|cdp · --js · --browser PATH · --stealth · --ads
-#        --device iphone_15 · --ua · --proxy socks5://… · --header "K: V"
-#        --cookie "a=b" · --viewport 1920x1080 · --wait SEL · --timeout ms
+# global flags
+--engine auto|lite|cdp · --js · --browser PATH · --stealth · --ads
+--device iphone_15 · --ua · --locale · --tz · --proxy socks5://…
+--header "K: V" · --cookie "a=b" · --viewport 1920x1080
+--wait SEL · --timeout ms · --headed
 ```
 
-## API cheat-sheet
+---
 
-```js
-const browser = await velox.launch({ headless: true, browser: 'auto', proxy: { server, username, password } });
-const page    = await browser.newPage({ stealth, ads, device, ua, locale, timezone, viewport, headers, blockUrls, routes, initScripts, dialogs, geolocation, colorScheme, isolated });
-await page.goto(url, { waitUntil: 'interactive', timeout: 30000, referer });
+## API reference
 
-// data — every call is one round-trip
-page.title() / page.url() / page.content()
-page.text(sel) / page.attr(sel, name) / page.html(sel) / page.count(sel)
-page.extract(sel, { text, attrs: ['href'], html, tag, limit })   // ← workhorse
-page.links() / page.images() / page.tables() / page.forms() / page.meta() / page.jsonld()
-page.readable()                    // markdown-ish main content
+<details>
+<summary><b>velox</b> — top level</summary>
 
-// locators — zero-handle, always live
-const h1 = page.$('h1');
-await h1.waitFor({ timeout: 5000 });
-await h1.click(); await h1.type('hi', { human: true });
+| export | |
+|---|---|
+| `velox.open(url, opts?)` | adaptive session (`engine`, `stealth`, `ads`, `device`, `ua`, `proxy`, `headers`, `routes`, `timeout`, …) |
+| `velox.scrape(url, {recipe})` | one-shot scrape: `all, text, links, images, tables, meta, jsonld` |
+| `velox.launch(opts?)` | any installed browser (`headless`, `proxy`, `args`, `userDataDir`, `transport`, `timeout`) |
+| `velox.launchPersistentContext(dir, opts?)` | real profile |
+| `velox.connect(endpoint)` | `ws://…` or `host:port` |
+| `velox.detect()` | installed CDP browsers |
+| `velox.Pool`, `velox.DEVICES`, `velox.expect`, `velox.parseHtml`, `velox.needsJS` | utilities |
 
-// actions
-await page.click(sel, { clicks: 2, modifiers: ['ctrl'] });
-await page.type(sel, text, { delay: 20, human: true });
-await page.fill(sel, value);           // fast untrusted fill
-await page.press('Enter'); await page.mouse.humanMove(x, y);
+</details>
 
-// network
-page.on('response', (e) => e.response.status);
-page.route('**/api/**', (req) => req.fulfill({ body: '[]' }));
-page.mock('**/stats', { status: 204 });
-await page.block(['doubleclick.net', '*hotjar.com']);
-const har = await page.har({ withBodies: true });
+<details>
+<summary><b>Session / Page</b> — navigation, data, actions</summary>
 
-// sessions
-await page.setCookies([{ name: 'a', value: 'b', url }]);
-await page.saveSession('s.json'); await page.loadSession('s.json');
+| area | methods |
+|---|---|
+| navigation | `goto (waitUntil: none/interactive/load/networkidle/settle)`, `reload`, `back`, `forward`, `setContent`, `waitForUrl` |
+| data (1 round-trip each) | `title`, `url`, `content`, `text(sel)`, `attr`, `html`, `val`, `count`, `extract` (the workhorse), `texts`, `links`, `images`, `tables`, `forms`, `meta`, `jsonld`, `readable` |
+| actions | `click` (position/force/trial), `dblclick`, `hover`, `type` (human jitter), `fill`, `press`, `check/uncheck/setChecked`, `selectOption`, `selectText`, `dragAndDrop`, `scrollBy`, `scrollToBottom` |
+| waits | `waitForSelector` (attached/visible/hidden), `waitForFunction`, `waitForLoad`, `waitForRequest/Response/RequestFinished`, `waitForEvent/Dialog/Popup/Download`, `wait` |
+| input | `mouse.move/click/wheel/humanMove` (bezier paths), `keyboard.press/type/insertText`, `touch.tap/swipe` |
+| network | `route/unroute/mock/block`, `requests()`, `body(entry)`, `har`, `setHeaders`, `setOffline`, `emulateNetwork`, `cookies/setCookies` |
+| scripts | `eval` (`fn` or string), `evaluate`, `evaluateHandle`, `elementHandle(s)`, `$eval`, `$$eval`, `addInitScript/removeInitScript`, `addScriptTag/addStyleTag`, `expose(fn)` |
+| frames | `frameLocator(sel)`, `frames()`, `inFrame(sel)`, `>> ` selector piercing |
+| emulation | `emulate(device)`, `setViewport`, `setUA`, `setLocale`, `setTimezone`, `setGeolocation`, `emulateMedia`, `colorScheme` |
+| capture | `screenshot`, `pdf`, `video`, `coverage`, `accessibility`, `clock` |
+| sessions | `localStorage`, `saveSession/loadSession`, `cookies` |
+| events | `console`, `pageerror`, `dialog`, `request`, `response`, `requestfinished`, `download`, `filechooser`, `websocket`, `worker`, `frame`, `crash`, `close` |
 
-// frames & shadow dom
-await page.text('#host >> button.cta');          // pierce shadow root
-await page.inFrame('#comments').text('.c-body'); // same-origin iframe
+</details>
 
-// bindings & events
-await page.expose('sum', (a, b) => a + b);       // page: await window.sum(1, 2)
-page.on('console' | 'pageerror' | 'dialog' | 'download' | 'popup', fn);
+<details>
+<summary><b>Browser & Context</b></summary>
 
-// pool
-const pool = new velox.Pool({ browsers: 4, pagesPerBrowser: 4, pageOpts: { ads: true } });
-await pool.map(urls, (u, page) => page.goto(u).then(() => page.title()), { concurrency: 16 });
+| object | surface |
+|---|---|
+| `Browser` | `newPage`, `newContext`, `defaultContext`, `pages`, `close`, events `popup/worker/serviceworker/frame/target` |
+| `BrowserContext` | `newPage`, `route`, `addInitScript`, `expose`, `cookies`, `storageState`, `grantPermissions`, `setOffline`, `setGeolocation`, `request`, `startTracing/stopTracing`, `newCDPSession`, `close` |
+| `Download` | `url`, `suggestedFilename`, `finished()`, `path()`, `saveAs()`, `cancel()` |
+| `JSHandle / ElementHandle` | `evaluate`, `jsonValue`, `getProperties`, `click`, `boundingBox`, `$(sel)`, `screenshot` |
+| `Pool` | `acquire/release/use/map(items, fn, {concurrency})` |
+
+</details>
+
+<details>
+<summary><b>Lite engine</b> — the no-browser path</summary>
+
+| API | |
+|---|---|
+| `velox.fetch(url, opts?)` | keep-alive HTTP, gzip/brotli/deflate, redirects, cookie jar — returns `{status, headers, text(), json(), doc}` |
+| `velox.parseHtml(html)` | from-scratch parser + CSS-subset DOM (`select`, `selectAll`, `text`, `links`, `tables`, `readable`, …) |
+| `velox.needsJS(res)` | the escalation heuristics, usable standalone |
+
+</details>
+
+---
+
+## Testing
+
+146 checks across four suites, no CI browser downloads beyond a stock
+chrome-headless-shell:
+
+```bash
+npm test          # smoke (37) · lite+auto (27) · pool · playwright parity (82)
+npm run bench     # head-to-head vs playwright-core, same binary
+node examples/tour.mjs
 ```
 
-## Benchmarks
+CI runs on every push — see the badge above and
+[.github/workflows/ci.yml](.github/workflows/ci.yml).
 
-Same binary (chrome-headless-shell 154), same box, 12 runs, medians:
+## Honest limitations
 
-```
-⚡ browser launch                  velox   66ms  |  playwright   71ms   1.08×
-⚡ goto + DOMContentLoaded         velox   22ms  |  playwright   23ms   1.05×
-⚡ 10× title()                     velox   18ms  |  playwright   26ms   1.44×
-⚡ batch extract (3 els)           velox    1ms  |  playwright   27ms  27.00×
-⚡ fill + click + submit           velox   48ms  |  playwright   80ms   1.67×
-⚡ waitForSelector (700ms delay)   velox  632ms  |  playwright  788ms   1.25×
-=  full-page screenshot            velox   51ms  |  playwright   48ms   0.94×
-⚡ second navigation               velox   14ms  |  playwright   40ms   2.86×
-⚡ browser close                   velox    4ms  |  playwright   33ms   8.25×
-🚀 lite engine (no browser)        page fetch 1–2ms · extract ~1ms
-```
+- **Firefox and WebKit are not supported.** They don't implement CDP (Firefox
+  removed it; Safari never had it). Everything Chrome-family works.
+- **Stealth is best-effort** surface patching — dedicated detection stacks can
+  still fingerprint a headless environment. Use a full (non-shell) browser and
+  a persistent profile for the most realistic footprint.
+- **Video records GIF**, not mp4 — the deliberate price of zero dependencies.
+- **The lite engine parses HTML, it doesn't run it** — no JS, no client-side
+  rendering, no same-origin iframe DOM (the browser engine handles all of that).
 
-Reproduce: `node test/bench.js 12` (needs `npm i --no-save playwright-core`).
-Run the suite: `npm test`.
+## FAQ
 
-## Compatibility notes
+<details>
+<summary><b>Which browser will velox use?</b></summary>
 
-- **Browsers:** anything speaking CDP — Chrome/Chromium 111+, Edge, Brave,
-  Vivaldi, Opera, Thorium, chrome-headless-shell. `--headless=new` on full
-  browsers; headless shells run natively headless. Firefox/Safari are not CDP
-  browsers (Firefox dropped CDP; Safari has no CDP) — not supported.
-- **Node:** ≥ 20 (native WebSocket; ≥ 22 recommended).
-- **Stealth** is best-effort surface patching; dedicated detection stacks can
-  still fingerprint headless environments. Combine with a full browser
-  (`google-chrome`, not headless-shell) and a real profile for best results.
-- **Windows/macOS:** discovery covers standard install paths; CI containers
-  work out of the box (auto `--no-sandbox`/`--disable-dev-shm-usage` as root).
-- **Snap Chromium on Linux** works for automation but its confinement can block
-  downloads to `/tmp` — point `VELOX_BROWSER` at a native binary (or pass
-  `downloads: '/path/in/home'`) if you need downloads there.
+`vlx detect` shows the candidates. Preference order: Chrome → Chromium → Edge →
+Brave → Vivaldi → Opera → headless-shell. Snap-wrapped browsers are
+deprioritized when a native binary exists (snap confinement breaks some /tmp
+behavior). Pin with `VELOX_BROWSER`, `--browser`, or `executablePath`.
+</details>
+
+<details>
+<summary><b>Does the auto engine decide wrong sometimes?</b></summary>
+
+Heuristics can be fooled. Force the outcome when you know it:
+`velox.open(url, { engine: 'lite' })`, `{ engine: 'cdp' }`, or upgrade any
+session manually with `await session.upgrade()`.
+</details>
+
+<details>
+<summary><b>Running as root / in a container?</b></summary>
+
+Velox auto-adds `--no-sandbox --disable-gpu --disable-dev-shm-usage` when the
+UID is 0, so CI and Docker just work.
+</details>
+
+<details>
+<summary><b>Why is my first navigation status <code>null</code>?</b></summary>
+
+`goto` resolves at `DOMContentLoaded` — the HTTP status arrives with the
+response, usually before. With `waitUntil: 'none'` the navigation returns
+before the response lands; read `page.status` after, or use `waitUntil: 'load'`.
+</details>
+
+<details>
+<summary><b>Can I use raw CDP?</b></summary>
+
+Yes: `page.createCDPSession()` (or `context.newCDPSession(page)`) returns the
+live session — `send`, `fire`, `waitForEvent`, all pipelined.
+</details>
 
 ## License
 
-MIT
+[MIT](LICENSE)

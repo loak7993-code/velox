@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install chrome-headless-shell
+        run: |
+          curl -sL https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json -o /tmp/cf.json
+          URL=$(python3 -c "import json; d=json.load(open('/tmp/cf.json')); print([x['url'] for x in d['channels']['Stable']['downloads']['chrome-headless-shell'] if x['platform']=='linux64'][0])")
+          curl -sL -o /tmp/hs.zip "$URL"
+          python3 -m zipfile -e /tmp/hs.zip "$HOME/.browsers"
+          chmod +x "$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell"
+          echo "VELOX_BROWSER=$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+
+      - name: Verify zero dependencies
+        run: |
+          node -e "const p=require('./package.json'); const d={...p.dependencies,...p.devDependencies}; if(Object.keys(d).length){console.error('unexpected deps:',d);process.exit(1)} console.log('zero dependencies ✓')"
+
+      - name: Run test suite (146 checks)
+        run: npm test
+
+      - name: CLI smoke
+        run: |
+          node bin/vlx.js detect
+          node bin/vlx.js open https://example.com | head -3

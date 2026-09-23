@@ -19,6 +19,10 @@
     "bench": "node test/bench.js",
     "site": "node test/site/serve.js"
   },
-  "keywords": ["automation", "scraping", "cdp", "browser", "playwright", "puppeteer", "fast"],
+  "keywords": ["automation", "scraping", "cdp", "browser", "playwright", "puppeteer", "fast", "zero-dependencies"],
+  "repository": { "type": "git", "url": "git+https://github.com/loak7993-code/velox.git" },
+  "bugs": { "url": "https://github.com/loak7993-code/velox/issues" },
+  "homepage": "https://github.com/loak7993-code/velox#readme",
+  "author": "loak7993",
   "license": "MIT"
 }
