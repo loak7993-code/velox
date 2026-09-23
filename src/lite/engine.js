@@ -69,6 +69,18 @@ export async function fetch(url, opts = {}) {
   // route through a proxy when asked — same client, no browser needed
   const proxied = opts.proxy ? agentsFor(opts.proxy, { timeout: opts.timeout || 30000 }) : null;
   if (proxied?.authHeader) headers['proxy-authorization'] = proxied.authHeader;
+  const cache = opts.cache || null;
+  const cached = cache ? cache.get(current) : null;
+  if (cached?.fresh) {
+    // served without touching the network at all
+    const res = new LiteResponse(current, url, cached.status, cached.headers, cached.body, 0, jar, null);
+    res.fromCache = true; res.meta = { bytes: 0, cached: true, bytesSaved: cached.size, truncated: false };
+    return res;
+  }
+  if (cached) {
+    if (cached.etag) headers['if-none-match'] = cached.etag;
+    if (cached.lastModified) headers['if-modified-since'] = cached.lastModified;
+  }
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const cookie = jar.headerFor(current);
@@ -97,6 +109,18 @@ export async function fetch(url, opts = {}) {
 
     jar.setFrom(current, res.headers['set-cookie']);
 
+    // 304 Not Modified → reuse the cached body (a few hundred bytes instead of the page)
+    if (res.statusCode === 304 && cached) {
+      for await (const _ of res) { /* drain */ }
+      const ms304 = Number((process.hrtime.bigint() - t0) / 1000000n);
+      const entry = cache.hit304(current, cached.size);
+      const out = new LiteResponse(current, url, cached.status, cached.headers, cached.body, ms304, jar, null);
+      out.fromCache = true;
+      out.meta = { bytes: 0, cached: true, revalidated: true, bytesSaved: cached.size, truncated: false };
+      if (!entry) cache.set(current, { status: cached.status, headers: cached.headers, body: cached.body, etag: cached.etag, lastModified: cached.lastModified });
+      return out;
+    }
+
     const decompress = (buf) => {
       const enc = String(res.headers['content-encoding'] || '').toLowerCase();
       if (enc === 'gzip' || enc === 'x-gzip') return zlib.gunzipSync(buf);
@@ -105,12 +129,26 @@ export async function fetch(url, opts = {}) {
       return buf;
     };
 
+    // stream the body, honouring maxBytes so a huge asset can't eat the link
+    const cap = opts.maxBytes || 0;
     const chunks = [];
-    for await (const c of res) chunks.push(c);
+    let rawBytes = 0;
+    let truncated = false;
+    for await (const c of res) {
+      rawBytes += c.length;
+      if (cap && rawBytes > cap) {
+        chunks.push(c.subarray(0, Math.max(0, c.length - (rawBytes - cap))));
+        truncated = true;
+        res.destroy();
+        break;
+      }
+      chunks.push(c);
+    }
     const raw = Buffer.concat(chunks);
     let body;
     try { body = decompress(raw); } catch { body = raw; }
     const ms = Number((process.hrtime.bigint() - t0) / 1000000n);
+    if (cache) cache.stats.bytesFetched += rawBytes;
 
     if (res.statusCode === 407 && !(headers['proxy-authorization'])) {
       throw new Error('proxy authentication required (HTTP 407) — pass credentials, e.g. http://user:pass@host:port');
@@ -120,7 +158,12 @@ export async function fetch(url, opts = {}) {
       if (res.statusCode === 303) { opts.method = 'GET'; delete opts.body; }
       continue;
     }
-    return new LiteResponse(current, url, res.statusCode, res.headers, body, ms, jar, res);
+    if (cache && !truncated) {
+      cache.set(current, { status: res.statusCode, headers: res.headers, body, etag: res.headers.etag, lastModified: res.headers['last-modified'] });
+    }
+    const out = new LiteResponse(current, url, res.statusCode, res.headers, body, ms, jar, res);
+    out.meta = { bytes: rawBytes, cached: false, truncated, cap };
+    return out;
   }
   throw new Error(`Too many redirects (> ${maxRedirects})`);
 }
@@ -131,6 +174,9 @@ export class LiteResponse {
     this.headers = headers; this.body = body; this.ms = ms; this.jar = jar; this.raw = rawRes;
     this._doc = null;
   }
+  get bytes() { return this.meta?.bytes ?? this.body.length; }
+  get fromCache() { return !!this._fromCache; }
+  set fromCache(v) { this._fromCache = v; }
   text() { return this.body.toString('utf8'); }
   json() { return JSON.parse(this.text()); }
   get doc() { if (!this._doc) this._doc = parse(this.text()); return this._doc; }

@@ -62,6 +62,8 @@ check('forms()', (await page.forms())[0].fields.length >= 3);
 check('meta()', (await page.meta()).description === 'a page built to exercise velox');
 check('jsonld()', (await page.jsonld())[0]['@type'] === 'WebSite');
 check('links()', (await page.links()).some((l) => l.href.endsWith('page2.html')));
+const markdown = await page.readable();
+check('readable() renders markdown', markdown.includes('# Welcome to Velox') && markdown.includes('alpha'), JSON.stringify(markdown.slice(0, 60)));
 
 // 9. network capture + blocked urls
 const reqs = page.requests();

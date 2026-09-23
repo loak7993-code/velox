@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
-[![tests](https://img.shields.io/badge/tests-211%2F211-brightgreen)](https://github.com/loak7993-code/velox/actions)
+[![tests](https://img.shields.io/badge/tests-250%2F250-brightgreen)](https://github.com/loak7993-code/velox/actions)
 [![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
@@ -323,6 +323,48 @@ await page.warm(['.product', '.product .price', 'a.next']);
 | `page.warm(selectors)` | in-page parse cache; long selector chains also went O(n²) → O(n) |
 | `newPage({ capture: false })` | skips the Network domain entirely — lighter page + faster loads, no request log |
 | `velox.config({ timeout })` | one default for every action; override per page with `page.setDefaultTimeout(ms)` |
+
+### Bandwidth
+
+Most automation bandwidth is spent on bytes you never read. velox makes that a
+first-class, measurable knob — profiles, size caps, third-party filtering and a
+conditional-GET cache.
+
+```js
+const page = await b.newPage({ bandwidth: 'text-only' });   // documents only
+await b.newPage({ bandwidth: 'lean' });                    // also blocks images/fonts/media
+await b.newPage({ bandwidth: { block: ['image', 'media'], maxBytes: 1_000_000, blockThirdParty: true } });
+await page.setBandwidth('minimal');                        // switch at runtime
+
+const bw = page.transferred();   // { total, byType, blocked, profile } — measured, not estimated
+page.on('blocked', (e) => console.log(e.reason, e.url));   // "type:Image", "third-party:Script", "oversize:Media"
+```
+
+Measured on a 125-resource test page (`node test/bandwidth.js`):
+
+| profile | transferred | requests blocked | vs full |
+|---|---:|---:|---:|
+| `full` | 473.8 KB | 0 | — |
+| `lean` | **5.6 KB** | 121 | **99% less** |
+| `minimal` | **5.6 KB** | 121 | **99% less** |
+| `text-only` | **4.8 KB** | 122 | **99% less** |
+
+The browser-free engine is even cheaper — it only ever downloads the document —
+and now keeps a **conditional-GET cache** (`ETag`/`Last-Modified`), so re-fetching
+an unchanged page costs a **304 round-trip instead of the whole body**:
+
+```js
+const cache = velox.createCache({ dir: '.velox-cache' });   // persists across runs
+await velox.fetch(url, { cache });                          // 200 + stored
+await velox.fetch(url, { cache });                          // 304 → served from disk
+cache.stats;                                                // { revalidated, bytesSaved, ... }
+
+await velox.fetch(url, { cache, ttl: 60_000 });             // skip revalidation entirely for 60 s
+await velox.fetch(hugeUrl, { maxBytes: 500_000 });          // abort oversized bodies mid-stream
+await velox.fetchAll(urls, { cache, concurrency: 16 });     // one cache, no browser
+```
+
+CLI: `vlx open <url> --bandwidth text-only --cache-dir .velox-cache`
 
 ### Proxies
 

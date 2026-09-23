@@ -11,12 +11,14 @@ import { ENGINE_SOURCE } from './cdp/inject.js';
 import { Pool } from './pool.js';
 import { open, scrape, LiteSession, BrowserSession } from './auto.js';
 import { fetch as liteFetch, fetchAll as liteFetchAll, CookieJar, needsJS } from './lite/engine.js';
+import { HttpCache, createCache } from './lite/cache.js';
 import { parse as parseHtml } from './lite/html.js';
 import { expect } from './assert.js';
 import { createRequire } from 'node:module';
 const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
 import { config, getConfig, use, registerDevice, registeredDevices, plugins as pluginPresets, registeredPluginList } from './plugins.js';
+import { PRESETS as BANDWIDTH_PROFILES, resolveBandwidth, fmtBytes } from './bandwidth.js';
 
 const velox = {
   /** Open a URL — lite HTTP first, real browser only if the page needs JS. */
@@ -40,6 +42,9 @@ const velox = {
   parseHtml,
   needsJS,
   CookieJar,
+  /** Conditional-GET cache for the browser-free engine: velox.createCache({ dir }) */
+  createCache,
+  HttpCache,
   expect,
   ProxyPool,
   checkProxy,
@@ -54,6 +59,10 @@ const velox = {
   plugins: pluginPresets,
   /** Add a device preset: velox.registerDevice('pixel_9', { width, height, ua, … }) */
   registerDevice,
+  /** Bandwidth profiles: velox.BANDWIDTH.lean | .minimal | .text-only */
+  BANDWIDTH: BANDWIDTH_PROFILES,
+  resolveBandwidth,
+  fmtBytes,
   Browser,
   VeloxPage,
   BrowserContext,
@@ -69,9 +78,10 @@ const velox = {
 export {
   open, scrape, launch, launchPersistentContext, connect, discoverBrowsers, Pool, DEVICES,
   Browser, VeloxPage, BrowserContext, Locator, JSHandle, ElementHandle, LiteSession, BrowserSession,
-  WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, expect,
+  WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, createCache, HttpCache, expect,
   ProxyPool, checkProxy, normalizeProxy, proxyFlags,
   config, getConfig, use, registerDevice, registeredDevices, pluginPresets as plugins,
+  BANDWIDTH_PROFILES, resolveBandwidth, fmtBytes,
 };
 export default velox;
 export { velox };

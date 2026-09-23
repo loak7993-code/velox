@@ -27,7 +27,7 @@ function parse(args) {
     else if (a === '--sel' || a === '--wait' || a === '--recipe' || a === '--engine' || a === '--browser' || a === '--device' || a === '--ua' || a === '--proxy' || a === '--timeout' || a === '--viewport' || a === '--format' || a === '--load-session') out[a.slice(2)] = args[++i];
     else if (a === '--header') { const [k, v] = (args[++i] || '').split(/:(.*)/); out.headers[(k || '').trim()] = (v || '').trim(); }
     else if (a === '--proxy-auth') { const [u, p] = (args[++i] || '').split(':'); out.proxyAuth = { username: u, password: p || '' }; }
-    else if (a === '--retries' || a === '--config') out[a.slice(2)] = args[++i];
+    else if (a === '--retries' || a === '--config' || a === '--bandwidth' || a === '--max-bytes' || a === '--cache-dir' || a === '--cache-ttl') out[a.slice(2).replace(/-([a-z])/g, (m, ch) => ch.toUpperCase())] = args[++i];
     else if (a === '--cookie') out.cookies.push(args[++i]);
     else if (a.startsWith('-')) { /* ignore */ }
     else out._.push(a);
@@ -50,6 +50,7 @@ async function openOpts(flags) {
     ua: flags.ua, device: flags.device, locale: flags.locale, timezone: flags.tz,
     proxy: flags.proxy ? { server: flags.proxy, ...(flags.proxyAuth || {}) } : undefined,
     retries: flags.retries ? +flags.retries : undefined,
+    bandwidth: flags.bandwidth ? (/^\d+$/.test(flags.bandwidth) ? { maxBytes: +flags.bandwidth } : flags.bandwidth) : (flags.maxBytes ? { maxBytes: +flags.maxBytes } : undefined),
     headers: Object.keys(flags.headers).length ? flags.headers : undefined,
     timeout: flags.timeout ? +flags.timeout : undefined,
   };
@@ -85,6 +86,10 @@ Options:
   --proxy <server>             proxy server (http://, https://, socks5://; creds inline or --proxy-auth)
   --proxy-auth user:pass       proxy credentials (alternative to inline creds)
   --retries <n>                retry transient failures n times
+  --bandwidth full|lean|minimal|text-only   block resources you don't need (see README)
+  --max-bytes <n>              abort response bodies larger than n bytes
+  --cache-dir <dir>            keep a conditional-GET cache (ETag/304) between runs
+  --cache-ttl <ms>             serve cached pages without revalidating for this long
   --config <file>              load defaults from a JSON config file
   --header "K: V"              extra request header (repeatable)
   --cookie "a=b"               set cookie (repeatable)
@@ -114,7 +119,9 @@ switch (cmd) {
   case 'read': {
     const flags = parse(rest);
     const url = flags._[0] || die('usage: vlx open <url>');
-    const s = await velox.open(url, await openOpts(flags)).catch((e) => die(e.message));
+    const cache = flags.cacheDir || flags.bandwidth ? velox.createCache({ dir: flags.cacheDir, ttl: flags.cacheTtl ? +flags.cacheTtl : 0 }) : null;
+    const s = await velox.open(url, { ...(await openOpts(flags)), ...(cache ? { cache } : {}) }).catch((e) => die(e.message));
+    if (cache && flags.json) console.error(`cache: ${JSON.stringify(cache.stats)}`);
     if (process.env.VLX_DEBUG) {
       console.error('[dbg] engine:', s.engine, '| url:', s.url, '| exe:', process.env.VELOX_BROWSER || 'auto');
       console.error('[dbg] title:', await s.title().catch((e) => 'ERR ' + e.message));
@@ -126,6 +133,11 @@ switch (cmd) {
     else if (flags.raw) console.log(String(await s.html()));
     else if (sel) console.log((await s.extract(sel)).map((e) => e.text ?? JSON.stringify(e)).join('\n'));
     else console.log(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`);
+    if (!flags.quiet) {
+      const bw = s.raw?.transferred?.();
+      if (bw) console.error(`[bandwidth] profile=${bw.profile} transferred=${bw.human} blocked=${Object.values(bw.blocked || {}).reduce((a, b) => a + b, 0)} reqs`);
+      else if (cache) console.error(`[bandwidth] cached=${cache.stats.revalidated} saved=${velox.fmtBytes(cache.stats.bytesSaved)}`);
+    }
     await s.close?.().catch(() => {});
     break;
   }

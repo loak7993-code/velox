@@ -29,6 +29,10 @@ declare module 'velox' {
   }
 
   export interface VeloxFetchOptions {
+    /** Conditional-GET cache instance (velox.createCache()). */
+    cache?: HttpCache;
+    /** Abort the body beyond this many bytes. */
+    maxBytes?: number;
     headers?: Record<string, string>;
     timeout?: number;
     method?: string;
@@ -145,7 +149,15 @@ declare module 'velox' {
   export interface ScreenshotOptions { path?: string; full?: boolean; selector?: string; type?: 'png' | 'jpeg'; quality?: number; fast?: boolean; clip?: { x: number; y: number; width: number; height: number }; }
   export interface PdfOptions { path?: string; format?: string | [number, number]; landscape?: boolean; printBackground?: boolean; margin?: { top?: number; right?: number; bottom?: number; left?: number }; scale?: number; headerTemplate?: string; footerTemplate?: string; preferCSSPageSize?: boolean; }
 
+  export interface BandwidthRules {
+    preset?: 'full' | 'lean' | 'minimal' | 'text-only';
+    block?: string[];
+    maxBytes?: number;
+    blockThirdParty?: boolean;
+  }
+
   export interface PageOptions {
+    bandwidth?: 'full' | 'lean' | 'minimal' | 'text-only' | BandwidthRules;
     capture?: boolean;              // false = skip the Network domain (faster, no request log)
     proxy?: ProxyOptions;
     retries?: number; retryDelay?: number;
@@ -279,6 +291,10 @@ declare module 'velox' {
     /** Register a custom in-page selector engine, used as `name=value`. */
     addSelectorEngine(name: string, fn: ((value: string, root: any) => any[]) | string): Promise<any>;
     setDefaultTimeout(ms: number): VeloxPage;
+    /** Bytes actually transferred, grouped by type, plus what the profile blocked. */
+    transferred(): { total: number; byType: Record<string, number>; human: string; blockedBytes: number; blocked: Record<string, number>; profile: string };
+    blockedRequests(): { reason: string; count: number }[];
+    setBandwidth(profile: PageOptions['bandwidth']): Promise<VeloxPage>;
     healthy(opts?: { timeout?: number }): Promise<boolean>;
     reconnect(opts?: { attempts?: number; delay?: number }): Promise<Browser>;
     count(sel: string): Promise<number>;
@@ -465,6 +481,16 @@ declare module 'velox' {
     metrics: { created: number; acquired: number; released: number; waited: number };
   }
 
+  export class HttpCache {
+    constructor(opts?: { dir?: string; maxEntries?: number; maxBytes?: number; ttl?: number });
+    get(url: string): any;
+    set(url: string, entry: any): any;
+    clear(): void;
+    readonly size: number;
+    readonly bytes: number;
+    stats: { hits: number; misses: number; revalidated: number; stores: number; bytesServed: number; bytesSaved: number; bytesFetched: number };
+  }
+
   export class CookieJar {
     constructor();
     setFrom(url: string, setCookies: string[]): void;
@@ -509,6 +535,9 @@ declare module 'velox' {
     use(plugin: PluginHooks | (() => PluginHooks)): PluginHooks;
     plugins: Record<string, any>;
     registerDevice(name: string, def: Device): Device;
+    createCache(opts?: { dir?: string; ttl?: number; maxEntries?: number; maxBytes?: number }): HttpCache;
+    BANDWIDTH: Record<'full' | 'lean' | 'minimal' | 'text-only', BandwidthRules>;
+    fmtBytes(n: number): string;
     Browser: any;
     BrowserContext: any;
     VeloxPage: any;

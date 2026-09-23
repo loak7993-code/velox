@@ -14,6 +14,7 @@ import { Coverage } from './coverage.js';
 import { Accessibility } from './accessibility.js';
 import { Clock, CLOCK_SOURCE } from './clock.js';
 import { getConfig, applyPageOptions, runHook, hasHook, registeredDevices } from '../plugins.js';
+import { resolveBandwidth, sameSite, fmtBytes } from '../bandwidth.js';
 
 const KEYMAP = {
   enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
@@ -110,6 +111,9 @@ export class VeloxPage extends Emitter {
     // capture:false skips the Network domain — no request tracking, no per-request
     // event plumbing: lighter page creation and faster loads on request-heavy sites
     this._capture = opts.capture !== false;
+    // bandwidth profile: block resource types, cap body sizes, drop third-party chatter
+    this._bw = resolveBandwidth(opts.bandwidth);
+    this._bytesBlocked = 0; this._blockedByType = {};
     // single pipelined batch — all domain enables fly at once
     const jobs = [
       s.send('Page.enable'),
@@ -152,6 +156,7 @@ export class VeloxPage extends Emitter {
     // defaults
     this._dialogCfg = { action: opts.dialogs?.action || 'accept', promptText: opts.dialogs?.promptText || '' };
     if (opts.blockUrls || opts.ads) await this.block(opts.ads ? [...defaultBlocklist(), ...(opts.blockUrls || [])] : opts.blockUrls);
+    if (this._bw.blockTypes.size || this._bw.maxBytes || this._bw.blockThirdParty) await this._armBandwidth();
     if (opts.routes) for (const [pat, h] of Object.entries(opts.routes)) this.route(pat, h);
     if (opts.httpCredentials || proxyCred) {
       // intercept auth challenges (site login and/or proxy login)
@@ -455,11 +460,11 @@ export class VeloxPage extends Emitter {
 
   /** $eval(sel, fn, arg) — run fn(element, arg) in the page on the first match. */
   async $eval(sel, fn, arg, filters) {
-    return this.eval(`(function(){var el=__vlx.pick(${JSON.stringify(sel)}${filters && Object.keys(filters).length ? ',' + JSON.stringify(filters) : ''});if(!el)throw new Error('no element for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(el,${JSON.stringify(arg ?? null)})})()`);
+    return this.eval(String.raw`(function(){var el=__vlx.pick(${JSON.stringify(sel)}${filters && Object.keys(filters).length ? ',' + JSON.stringify(filters) : ''});if(!el)throw new Error('no element for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(el,${JSON.stringify(arg ?? null)})})()`);
   }
   /** $$eval(sel, fn, arg) — run fn(elements, arg) over all matches. */
   async $$eval(sel, fn, arg) {
-    return this.eval(`(function(){var els=__vlx.match(${JSON.stringify(sel)});if(!els.length)throw new Error('no elements for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(els,${JSON.stringify(arg ?? null)})})()`);
+    return this.eval(String.raw`(function(){var els=__vlx.match(${JSON.stringify(sel)});if(!els.length)throw new Error('no elements for ${String(sel).replace(/'/g, "\\'")}');return (${fn.toString()})(els,${JSON.stringify(arg ?? null)})})()`);
   }
 
   _root() {
@@ -796,7 +801,7 @@ export class VeloxPage extends Emitter {
   }
   /** plain-text markdown-ish rendering of the page */
   async readable() {
-    return this.eval(`(function(){
+    return this.eval(String.raw`(function(){
       var clone = document.body.cloneNode(true);
       clone.querySelectorAll('script,style,noscript,svg,template').forEach(function(e){e.remove()});
       var out=[]; var walk=function(el,depth){
@@ -1088,8 +1093,53 @@ export class VeloxPage extends Emitter {
     return this.route(urlPattern, (req) => req.fulfill(typeof response === 'function' ? response(req) : response));
   }
 
+  async _armBandwidth() {
+    const patterns = [{ urlPattern: '*' }];
+    if (this._bw.maxBytes) patterns.push({ urlPattern: '*', requestStage: 'Response' });
+    this._fetchOn = true;
+    await this.session.send('Fetch.enable', {
+      patterns,
+      ...(this._httpCredentials || this._proxyCredentials ? { handleAuthRequests: true } : {}),
+    }).catch(() => {});
+    return this;
+  }
+
   async _onPaused(p) {
     const { requestId, request, resourceType } = p;
+
+    // ── response stage: enforce the byte cap before the body streams ──────────
+    if (p.responseStatusCode !== undefined || p.responseHeaders !== undefined) {
+      const rules = this._bw;
+      if (rules?.maxBytes) {
+        const len = Number((p.responseHeaders || []).find((h) => h.name.toLowerCase() === 'content-length')?.value || 0);
+        if (len > rules.maxBytes) {
+          this._bytesBlocked += len;
+          const key = `oversize:${resourceType}`;
+          this._blockedByType[key] = (this._blockedByType[key] || 0) + 1;
+          return this.session.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' }).catch(() => {});
+        }
+      }
+      const ok = await this.session.send('Fetch.continueResponse', { requestId }).catch(() => null);
+      if (ok === null) await this.session.send('Fetch.continueRequest', { requestId }).catch(() => {});
+      return;
+    }
+
+    // ── request stage: resource-type + third-party filtering ─────────────────
+    const rules = this._bw;
+    if (rules && (rules.blockTypes.size || rules.blockThirdParty)) {
+      let reason = null;
+      if (rules.blockTypes.has(resourceType)) reason = `type:${resourceType}`;
+      else if (rules.blockThirdParty && this._url && /^https?:/.test(this._url)) {
+        try {
+          if (!sameSite(new URL(request.url).hostname, new URL(this._url).hostname)) reason = `third-party:${resourceType}`;
+        } catch {}
+      }
+      if (reason) {
+        this._blockedByType[reason] = (this._blockedByType[reason] || 0) + 1;
+        this.emit('blocked', { url: request.url, reason, resourceType });
+        return this.session.send('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {});
+      }
+    }
 
     // basic-auth challenge
     if (p.authChallenge) {
@@ -1205,6 +1255,33 @@ export class VeloxPage extends Emitter {
   }
 
   /* ------------------------------------------------ misc -------------------------------------------------- */
+
+  /* ------------------------------------------- bandwidth accounting -------------------------------------- */
+
+  /** Bytes actually transferred, grouped by resource type (needs capture on). */
+  transferred() {
+    const byType = {};
+    let total = 0;
+    for (const r of this.requests()) {
+      const n = r.encodedDataLength || 0;
+      const t = r.resourceType || 'Other';
+      byType[t] = (byType[t] || 0) + n;
+      total += n;
+    }
+    return { total, byType, human: fmtBytes(total), blockedBytes: this._bytesBlocked, blocked: { ...this._blockedByType }, profile: this._bw?.name };
+  }
+
+  /** Requests dropped by the bandwidth profile. */
+  blockedRequests() {
+    return Object.entries(this._blockedByType).map(([reason, count]) => ({ reason, count }));
+  }
+
+  /** Change the profile at runtime (re-arms interception). */
+  async setBandwidth(profile) {
+    this._bw = resolveBandwidth(profile);
+    if (this._bw.blockTypes.size || this._bw.maxBytes || this._bw.blockThirdParty) await this._armBandwidth();
+    return this;
+  }
 
   console() { return this._consoleBuffer; }
   errors() { return this._errorBuffer; }

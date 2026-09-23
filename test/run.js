@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 const suites = [
   ['launch behaviour', 'test/launch.js'],
   ['proxies', 'test/proxy.js'],
+  ['bandwidth', 'test/bandwidth.js'],
   ['plugins + stability', 'test/features.js'],
   ['smoke (cdp core)', 'test/smoke.js'],
   ['lite + auto engine', 'test/lite.js'],

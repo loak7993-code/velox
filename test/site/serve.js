@@ -2,6 +2,10 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { createHash } from 'node:crypto';
+
+export const siteStats = { conditional: 0, notModified: 0 };
+const etagOf = (buf) => '"' + createHash('sha1').update(buf).digest('hex').slice(0, 16) + '"';
 
 const DIR = new URL('.', import.meta.url).pathname;
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.css': 'text/css', '.bin': 'application/octet-stream' };
@@ -24,17 +28,28 @@ export function createSite() {
       const ms = Math.min(2000, Number(new URL(req.url, 'http://x').searchParams.get('ms') || 0));
       return void setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); }, ms);
     }
+    if (path === '/big.bin') {
+      const size = Math.min(20 << 20, Number(new URL(req.url, 'http://x').searchParams.get('mb') || 2) << 20);
+      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': size });
+      return res.end(Buffer.alloc(size, 9));
+    }
     if (path === '/heavy.html') {
       const n = 120;
+      const port = req.socket.localPort;
       const body = '<!doctype html><html><head><title>Heavy Page</title></head><body><h1 id="heavy">heavy</h1>'
         + Array.from({ length: n }, (_, i) => `<img src="/res/${i}.bin" alt="r${i}">`).join('')
-        + '<script src="/res/js.js"></script></body></html>';
-      res.writeHead(200, { 'content-type': 'text/html' });
+        + `<link rel="stylesheet" href="/res/style.css">`
+        + `<img src="//localhost:${port}/res/3rdparty.bin" alt="third">`
+        + '<script src="/res/js.js"></script>'
+        + '<script>fetch("/api/data.json")</script></body></html>';
+      res.writeHead(200, { 'content-type': 'text/html', etag: etagOf(Buffer.from(body)) });
       return res.end(body);
     }
     if (path.startsWith('/res/')) {
-      res.writeHead(200, { 'content-type': path.endsWith('.js') ? 'text/javascript' : 'application/octet-stream', 'cache-control': 'no-store' });
-      return res.end(path.endsWith('.js') ? 'window.__heavy=true' : Buffer.alloc(64, 3));
+      const isJs = path.endsWith('.js'), isCss = path.endsWith('.css');
+      const payload = isJs ? 'window.__heavy=true' : isCss ? '.x{color:#123456}'.repeat(40) : Buffer.alloc(4096, 3);
+      res.writeHead(200, { 'content-type': isJs ? 'text/javascript' : isCss ? 'text/css' : 'application/octet-stream', 'cache-control': 'no-store' });
+      return res.end(payload);
     }
     if (path === '/api/echo' && req.method === 'POST') {
       let body = '';
@@ -146,7 +161,17 @@ export function createSite() {
     const file = path === '/' ? '/index.html' : path;
     try {
       const body = readFileSync(join(DIR, file.slice(1)));
-      res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
+      const etag = etagOf(body);
+      if (req.headers['if-none-match']) {
+        siteStats.conditional++;
+        if (req.headers['if-none-match'] === etag) {
+          siteStats.notModified++;
+          res.writeHead(304, { etag });
+          return res.end();
+        }
+      }
+      if (req.headers['if-modified-since']) siteStats.conditional++;
+      res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream', etag, 'last-modified': 'Wed, 01 Jan 2025 00:00:00 GMT' });
       res.end(body);
     } catch {
       res.writeHead(404); res.end('nope');
