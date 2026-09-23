@@ -1250,6 +1250,16 @@ export class VeloxPage extends Emitter {
     return super.once(event, handler);
   }
 
+  /**
+   * Waiting on downloads/files must arm capture BEFORE the caller acts, otherwise
+   * the action can race the Browser.setDownloadBehavior command and the file is
+   * never written. (Plain `on(...)` stays fire-and-forget: the caller acts later.)
+   */
+  async waitForEvent(event, opts = {}) {
+    if (event === 'download' || event === 'filechooser') await this._ensureDownloads();
+    return super.waitForEvent(event, opts);
+  }
+
   /** Arm download capture (idempotent). Called automatically by download-related APIs. */
   async _ensureDownloads(opts = {}) {
     if (this._downloads) return this._downloads;
