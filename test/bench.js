@@ -7,7 +7,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
 const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 
 
-const EXE = process.env.VLOX_EXE || ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+const EXE = process.env.VLOX_EXE || process.env.VELOX_BROWSER || ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 const { chromium } = await import('playwright-core').catch(() => ({ chromium: null }));
 
 const site = await startSite();

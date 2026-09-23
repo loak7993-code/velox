@@ -41,20 +41,20 @@ const spa = await velox.fetch(`${SITE}/spa.html`);
 check('needsJS: SPA shell true', velox.needsJS(spa) === true);
 
 // 5. auto engine: static stays lite
-const liteSession = await velox.open(SITE, { engine: 'auto', executablePath: process.env.VLOX_EXE });
+const liteSession = await velox.open(SITE, { engine: 'auto', executablePath: process.env.VLOX_EXE || process.env.VELOX_BROWSER });
 check('auto: static stays lite', liteSession.engine === 'lite');
 check('auto: lite data methods', liteSession.title() === 'Velox Test Site');
 check('auto: lite $()', (await liteSession.$('h1').text()) === 'Welcome to Velox');
 
 // 6. auto engine: SPA escalates to browser
-const spaSession = await velox.open(`${SITE}/spa.html`, { engine: 'auto', executablePath: process.env.VLOX_EXE });
+const spaSession = await velox.open(`${SITE}/spa.html`, { engine: 'auto', executablePath: process.env.VLOX_EXE || process.env.VELOX_BROWSER });
 check('auto: SPA escalates', spaSession.engine === 'cdp', `engine=${spaSession.engine}`);
 const jsContent = await spaSession.waitForSelector('#js-done', { timeout: 5000 }).then(() => spaSession.text('#js-done')).catch(() => null);
 check('auto: JS content rendered', jsContent === 'spa content ready', String(jsContent));
 await spaSession.close();
 
 // 7. lite session transparent upgrade on browser op
-const s2 = await velox.open(SITE, { engine: 'auto', executablePath: process.env.VLOX_EXE });
+const s2 = await velox.open(SITE, { engine: 'auto', executablePath: process.env.VLOX_EXE || process.env.VELOX_BROWSER });
 check('upgrade starts lite', s2.engine === 'lite');
 const shot = await s2.screenshot({ full: true });   // browser op → escalates
 check('transparent upgrade screenshot', s2.engine === 'cdp' && shot.length > 3000, `${s2.engine}, ${shot.length}b`);

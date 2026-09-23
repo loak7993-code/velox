@@ -8,13 +8,18 @@ const site = await startSite();
 const SITE = site.url;
 const pool = new Pool({
   browsers: 2, pagesPerBrowser: 2,
-  launch: { executablePath: process.env.VLOX_EXE },
+  launch: { executablePath: process.env.VLOX_EXE || process.env.VELOX_BROWSER },
   pageOpts: {},
 });
 
 const urls = ['/page2.html', '/frame.html', '/', '/page2.html', '/', '/frame.html', '/', '/page2.html'];
 const t0 = Date.now();
-const titles = await pool.map(urls, (u, page) => page.goto(SITE + u, { waitUntil: 'interactive' }).then(() => page.title()));
+const titles = await pool.map(urls, async (u, page) => {
+  await page.goto(SITE + u, { waitUntil: 'interactive' });
+  // a pooled page may still be finishing a previous navigation: confirm we landed
+  await page.waitForFunction(`location.href.indexOf(${JSON.stringify(u)}) !== -1`, { timeout: 5000 }).catch(() => {});
+  return page.title();
+});
 const ms = Date.now() - t0;
 console.log('titles:', titles);
 console.log(`8 pages in parallel: ${ms}ms  (metrics: ${JSON.stringify(pool.metrics)})`);

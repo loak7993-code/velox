@@ -2,7 +2,7 @@
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
 
-const EXE = process.env.VELOX_BROWSER || process.env.VLOX_EXE;
+const EXE = process.env.VELOX_BROWSER || process.env.VLOX_EXE || process.env.VELOX_BROWSER;
 const site = await startSite();
 const S = site.url;
 const N = Number(process.argv[2] || 8);
