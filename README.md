@@ -1,10 +1,6 @@
 <div align="center">
 
-# ⚡ velox
-
-**Browser automation at terminal velocity.**
-
-Zero dependencies · Drives the browser you already have · Or no browser at all
+<img src="assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)

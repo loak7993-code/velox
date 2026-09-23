@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="velox">
+  <title>velox</title>
+  <defs>
+    <linearGradient id="vx-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080d1c"/>
+      <stop offset="0.55" stop-color="#0e1630"/>
+      <stop offset="1" stop-color="#151d3d"/>
+    </linearGradient>
+    <linearGradient id="vx-bolt" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#a5f3fc"/>
+      <stop offset="0.35" stop-color="#38bdf8"/>
+      <stop offset="0.72" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <radialGradient id="vx-glow" cx="0.62" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#4f46e5" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#4f46e5" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vx-core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#e0f7ff" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="vx-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="vx-tight" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+  </defs>
+
+  <!-- badge -->
+  <rect width="512" height="512" rx="116" fill="url(#vx-bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#vx-glow)"/>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="115" fill="none" stroke="#7dd3fc" stroke-opacity="0.14" stroke-width="3"/>
+
+  <!-- motion streaks -->
+  <g fill="#38bdf8">
+    <rect x="92"  y="182" width="58" height="17" rx="8.5" opacity="0.30"/>
+    <rect x="70"  y="240" width="104" height="17" rx="8.5" opacity="0.52"/>
+    <rect x="92"  y="298" width="58" height="17" rx="8.5" opacity="0.30"/>
+  </g>
+
+  <!-- bolt: outer glow, inner glow, body, hot core -->
+  <g transform="translate(265,254) scale(1.16) translate(-265,-254)">
+    <path d="M318 74 L186 292 h86 L198 438 L344 218 h-92 Z"
+          fill="#22d3ee" opacity="0.45" filter="url(#vx-soft)"/>
+    <path d="M318 74 L186 292 h86 L198 438 L344 218 h-92 Z"
+          fill="#38bdf8" opacity="0.55" filter="url(#vx-tight)"/>
+    <path d="M318 74 L186 292 h86 L198 438 L344 218 h-92 Z"
+          fill="url(#vx-bolt)"/>
+    <path d="M318 74 L232 214 L262 214 L206 318 L246 244 L214 244 Z"
+          fill="url(#vx-core)" opacity="0.5"/>
+  </g>
+</svg>

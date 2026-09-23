@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 512 512" role="img" aria-label="velox">
+  <title>velox</title>
+  <defs>
+    <linearGradient id="f-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1120"/>
+      <stop offset="1" stop-color="#151d3d"/>
+    </linearGradient>
+    <linearGradient id="f-bolt" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#a5f3fc"/>
+      <stop offset="0.45" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <!-- favicon: no blur filters, heavier bolt, larger streaks — readable at 16px -->
+  <rect width="512" height="512" rx="96" fill="url(#f-bg)"/>
+  <g fill="#38bdf8" opacity="0.5">
+    <rect x="56" y="196" width="72" height="30" rx="15"/>
+    <rect x="24" y="241" width="120" height="30" rx="15"/>
+    <rect x="56" y="286" width="72" height="30" rx="15"/>
+  </g>
+  <path d="M336 44 L176 302 h104 L194 468 L370 200 h-108 Z" fill="url(#f-bolt)"/>
+</svg>

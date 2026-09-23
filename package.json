@@ -6,23 +6,52 @@
   "main": "./src/index.js",
   "module": "./src/index.js",
   "types": "./types/velox.d.ts",
-  "bin": { "vlx": "./bin/vlx.js" },
+  "bin": {
+    "vlx": "./bin/vlx.js"
+  },
   "exports": {
-    ".": { "import": "./src/index.js", "types": "./types/velox.d.ts" },
+    ".": {
+      "import": "./src/index.js",
+      "types": "./types/velox.d.ts"
+    },
     "./lite": "./src/lite/engine.js",
     "./cdp": "./src/cdp/browser.js"
   },
-  "engines": { "node": ">=20" },
-  "files": ["src", "bin", "types", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "src",
+    "bin",
+    "types",
+    "assets",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node test/run.js",
     "bench": "node test/bench.js",
     "site": "node test/site/serve.js"
   },
-  "keywords": ["automation", "scraping", "cdp", "browser", "playwright", "puppeteer", "fast", "zero-dependencies"],
-  "repository": { "type": "git", "url": "git+https://github.com/loak7993-code/velox.git" },
-  "bugs": { "url": "https://github.com/loak7993-code/velox/issues" },
+  "keywords": [
+    "automation",
+    "scraping",
+    "cdp",
+    "browser",
+    "playwright",
+    "puppeteer",
+    "fast",
+    "zero-dependencies"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loak7993-code/velox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/loak7993-code/velox/issues"
+  },
   "homepage": "https://github.com/loak7993-code/velox#readme",
   "author": "loak7993",
-  "license": "MIT"
+  "license": "MIT",
+  "icon": "assets/logo-512.png"
 }
