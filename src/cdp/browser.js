@@ -33,7 +33,7 @@ export class Browser extends Emitter {
     conn.on('disconnect', (e) => this.emit('disconnect', e));
     // keep one blank renderer warm so newPage() skips renderer spin-up (~30ms → ~4ms)
     this._spares = [];
-    this._spareTarget = opts.spare ?? 1;
+    this._spareTarget = opts.spare ?? 2;
     if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
   }
 
@@ -134,10 +134,11 @@ export class Browser extends Emitter {
   }
 
   /** Internal: create + attach + init a page in a given context. */
-  async _createPage(opts = {}, browserContextId = null) {
+  async _createPage(opts = {}, browserContextId = null, { timeout } = {}) {
+    const sendOpts = timeout ? { timeout } : {};
     const { targetId } = await this.conn.send('Target.createTarget', {
       url: 'about:blank', ...(browserContextId ? { browserContextId } : {}),
-    });
+    }, sendOpts);
     // auto-attach can beat the createTarget response and already manage this
     // target — reuse that page (its _init is idempotent) instead of double-attaching
     const raced = this._knownTargets.get(targetId);
@@ -149,7 +150,7 @@ export class Browser extends Emitter {
     this._pendingAttaches.add(targetId);
     let sessionId;
     try {
-      ({ sessionId } = await this.conn.send('Target.attachToTarget', { targetId, flatten: true }));
+      ({ sessionId } = await this.conn.send('Target.attachToTarget', { targetId, flatten: true }, sendOpts));
     } finally {
       this._pendingAttaches.delete(targetId);
     }
@@ -365,11 +366,19 @@ export class Browser extends Emitter {
     if (this.closed || this._sparePromise) return this._sparePromise;
     const need = (this._spareTarget || 0) - this._spares.length;
     if (need <= 0) return null;
-    this._sparePromise = Promise.all(Array.from({ length: need }, () => this._createPage({ capture: false }, null).then((p) => {
-      if (this.closed) return p.close().catch(() => {});
-      p._spare = true;
+    const one = async () => {
+      const p = await this._createPage({ capture: false }, null, { timeout: this.opts.spareTimeout ?? 10000 });
+      if (this.closed) { await p.close().catch(() => {}); return; }
+      p._spare = true; p._spareAt = Date.now();
       this._spares.push(p);
-    }).catch(() => {}))).finally(() => { this._sparePromise = null; });
+    };
+    this._sparePromise = Promise.all(Array.from({ length: need }, () => one().catch(() => {})))
+      .finally(() => {
+        this._sparePromise = null;
+        // keep the pool topped up continuously: the scrape loop (create → read → close)
+        // drains faster than a single refill round-trips
+        if (!this.closed && this._spares.length < (this._spareTarget || 0)) setTimeout(() => this._topUpSpares(), 0);
+      });
     return this._sparePromise;
   }
 
@@ -377,10 +386,17 @@ export class Browser extends Emitter {
   async newPage(opts = {}) {
     const ctx = this.defaultContext();
     // adopt a warm spare (or an explicitly pre-warmed pool page): attach-only path
+    // drop spares that have gone stale (a browser under load can take arbitrarily long)
+    if (this._spares?.length) {
+      const maxAge = this.opts.spareMaxAge ?? 120000;
+      this._spares = this._spares.filter((p) => !p.isClosed && Date.now() - (p._spareAt || 0) < maxAge);
+    }
     let warm = (this._pool?.length ? this._pool.pop() : null) || (opts.spare === 0 ? null : this._spares.pop());
-    if (!warm && opts.spare !== 0 && this._sparePromise) {
-      // a spare is nearly ready — waiting for it beats a cold renderer start
-      await this._sparePromise.catch(() => {});
+    if (!warm && opts.spare !== 0 && (this._sparePromise || this._spares.length < (this._spareTarget || 0))) {
+      // Behind target: start (or join) a refill and wait for it — a spare lands faster
+      // than building a page cold, and page creation must never block indefinitely.
+      const refill = this._sparePromise || this._topUpSpares();
+      if (refill) await Promise.race([refill.catch(() => {}), new Promise((r) => setTimeout(r, opts.spareWait ?? 80))]);
       warm = this._spares.pop() || null;
     }
     if (warm) {
@@ -395,7 +411,12 @@ export class Browser extends Emitter {
     const page = await this._createPage(ctx.pageDefaults(opts), null);
     page.context = ctx;
     ctx._pages.add(page);
-    page.once('close', () => ctx._pages.delete(page));
+    page.once('close', () => {
+      ctx._pages.delete(page);
+      // closing a page frees a renderer slot — refill immediately so the next
+      // newPage() in a scrape loop stays on the fast path
+      if (this._spareTarget > 0) this._topUpSpares();
+    });
     if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
     return page;
   }
