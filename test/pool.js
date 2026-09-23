@@ -1,4 +1,5 @@
 // velox :: pool test — parallel scraping across pre-warmed pages
+import velox from '../src/index.js';
 import { Pool } from '../src/pool.js';
 import { startSite } from './site/serve.js';
 
