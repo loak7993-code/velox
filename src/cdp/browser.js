@@ -255,7 +255,6 @@ export class Browser extends Emitter {
         throw e;
       }
     }
-    applyExtensions(browser, 'browser');
     runHook('onBrowser', browser);
     return browser;
   }
@@ -356,7 +355,6 @@ export class Browser extends Emitter {
           .finally(() => { b._reconnecting = false; });
       });
     }
-    applyExtensions(b, 'browser');
     runHook('onBrowser', b);
     return b;
   }

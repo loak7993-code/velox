@@ -33,6 +33,7 @@ export function middleware(fn) {
 export function registerCommand(name, fn, { target = 'page' } = {}) {
   if (!registry.commands[target]) throw new Error(`velox.registerCommand(): unknown target "${target}" (page|browser|locator)`);
   registry.commands[target].set(name, fn);
+  defineCommand(PROTOS[target], name, fn);              // applies immediately, everywhere
   return fn;
 }
 
@@ -58,16 +59,26 @@ export function chainFor(page) {
   return registry.middleware;
 }
 
-/** Attach commands, hook listeners and selector engines to a page/browser/locator. */
-export function applyExtensions(target, kind) {
-  if (!target || registry.attached.has(target)) return target;
-  registry.attached.add(target);
-  for (const [name, fn] of registry.commands[kind] || []) {
-    if (name in target) continue;                       // never shadow the real API
-    Object.defineProperty(target, name, { value: fn, writable: true, configurable: true, enumerable: false });
+// Prototypes backing each target kind, injected from index.js to avoid import cycles.
+const PROTOS = { page: null, browser: null, locator: null };
+
+export function bindPrototypes(protos = {}) {
+  for (const [kind, proto] of Object.entries(protos)) {
+    if (!proto) continue;
+    PROTOS[kind] = proto;
+    for (const [name, fn] of registry.commands[kind]) defineCommand(proto, name, fn);
   }
-  return target;
 }
+
+/** Commands live on the prototype, so they reach existing AND future instances. */
+function defineCommand(proto, name, fn) {
+  if (!proto || name in proto) return false;            // never shadow the real API
+  Object.defineProperty(proto, name, { value: fn, writable: true, configurable: true, enumerable: false });
+  return true;
+}
+
+/** Kept for callers that used to attach per instance (now a no-op). */
+export function applyExtensions(target) { return target; }
 
 /** Namespace for user extensions: page.ext.anything = … */
 export function makeExtNamespace(target) {

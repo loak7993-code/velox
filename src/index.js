@@ -17,11 +17,14 @@ import { expect } from './assert.js';
 import { createRequire } from 'node:module';
 const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
-import { middleware, registerCommand, registerSelectorEngine, hook, registered as registeredExtensions } from './extend.js';
+import { middleware, registerCommand, registerSelectorEngine, hook, registered as registeredExtensions, bindPrototypes } from './extend.js';
 import { PROFILES as STEALTH_PROFILES, GEO as STEALTH_GEO } from './cdp/stealth.js';
 import { detect as detectChallenge, engage as engageChallenge, goto as gotoChallenge, VENDORS as CHALLENGE_VENDORS } from './challenge.js';
 import { config, getConfig, use, registerDevice, registeredDevices, plugins as pluginPresets, registeredPluginList } from './plugins.js';
 import { PRESETS as BANDWIDTH_PROFILES, resolveBandwidth, fmtBytes } from './bandwidth.js';
+
+// let registered commands live on the prototypes so they apply to existing instances too
+bindPrototypes({ page: VeloxPage.prototype, browser: Browser.prototype, locator: Locator.prototype });
 
 const velox = {
   /** Open a URL — lite HTTP first, real browser only if the page needs JS. */

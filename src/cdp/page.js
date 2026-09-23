@@ -208,7 +208,6 @@ export class VeloxPage extends Emitter {
       attachHuman(this, opts.human === false ? { jitter: 0 } : (opts.human || {}));      // page.human.*
       attachChallenge(this);                                                            // page.challenge.*
       makeExtNamespace(this);                                                           // page.ext.*
-      applyExtensions(this, 'page');                                                     // velox.registerCommand(...)
       const globalEngines = selectorEngineSource();
       if (globalEngines) {
         // an init script so they are re-installed on every navigation, plus one now
