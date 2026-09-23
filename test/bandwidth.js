@@ -23,10 +23,16 @@ const F = velox.fmtBytes;
 async function measure(profile) {
   const b = await velox.launch({ executablePath: EXE });
   const p = await b.newPage({ bandwidth: profile });
-  await p.goto(`${S}/heavy.html`, { waitUntil: 'load' }).catch(() => {});
-  await p.wait(700);
+  // bound the wait by the page marker instead of the 'load' event: a 125-resource
+  // page on a loaded CI box can exceed a load timeout, which used to measure 0 bytes
+  const nav = await p.goto(`${S}/heavy.html`, { waitUntil: 'interactive', timeout: 25000 })
+    .catch((e) => ({ error: e.message }));
+  await p.waitForFunction(`!!document.getElementById('heavy')`, { timeout: 10000 }).catch(() => {});
+  await p.wait(900);                                   // let subresources resolve / get blocked
   const t = p.transferred();
+  const reqs = p.requests().length;
   await b.close();
+  if (!t.total) throw new Error(`no traffic measured for profile "${profile}" (nav=${nav?.status ?? nav?.error}, requests=${reqs})`);
   return t;
 }
 
