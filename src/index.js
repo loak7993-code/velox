@@ -31,6 +31,11 @@ const velox = {
   fetchAll: liteFetchAll,
   /** Launch any installed Chromium-family browser. */
   launch,
+  /**
+   * Pre-launch browsers (+optional pages) so later launch()/open() calls are instant.
+   *   await velox.prewarm({ browsers: 1, pagesPerBrowser: 6 })
+   */
+  prewarm: async (opts = {}) => { Browser._warmTarget = opts.browsers ?? 1; return Browser.prewarm(opts); },
   /** Launch with a persistent profile (extensions, logins). */
   launchPersistentContext,
   /** Attach to a running browser / remote endpoint (host:port or ws://). */

@@ -303,26 +303,34 @@ Polling assertions with `.not` — pair them with any test runner.
 
 ---
 
-### Speed controls
+### Speed
+
+Everything below is measured by `npm run speed` (same machine, medians):
+
+| | before | v2.3 | |
+|---|---:|---:|---:|
+| `newPage()` | 29 ms | **2 ms** | **14.5×** — a spare renderer is kept warm and adopted |
+| `launch()` handoff (prewarmed) | 64 ms | **~0 ms** | `velox.prewarm()` keeps browsers ready |
+| 4 data actions | 2 ms | **1 ms** | 2× — `page.batch()` flies them in one flush |
+| 24 latency-bound pages | 749 ms | **73 ms** | **10.3×** — `fetchAll()`, no browser at all |
+| 12-page scrape workflow | 44 ms | **33 ms** | 1.33× — less setup per page |
+| navigate + ready-to-read | 17 ms | 16 ms | `waitUntil: 'none'` + `waitForSelector` |
+| viewport screenshot | 50 ms | 48 ms | `fast: true` |
 
 ```js
-// independent actions over ONE pipelined flush instead of one round-trip each
-await page.batch([['fill', '#user', 'a'], ['fill', '#pw', 'b'], ['click', '#go'], ['text', '.welcome']]);   // 4× faster
+// launch a browser and pre-build pages off the critical path
+await velox.prewarm({ browsers: 1, pagesPerBrowser: 6 });
+const browser = await velox.launch();      // hands back the warm browser instantly
+const page = await browser.newPage();      // ~2 ms — a blank renderer was waiting
 
-// static pages in parallel, no browser at all
-const pages = await velox.fetchAll(urls, { concurrency: 16 });        // 11× faster than sequential
-
-// pre-parse selectors the page will keep using (hot scraping loops)
-await page.warm(['.product', '.product .price', 'a.next']);
+// per-browser control (on by default; spare: 0 disables)
+await velox.launch({ spare: 4 });          // keep 4 warm renderers for bursts
 ```
 
-| knob | effect |
-|---|---|
-| `page.batch(actions)` | 5 independent actions: **8 ms → 2 ms (4×)** |
-| `velox.fetchAll(urls, {concurrency})` | 24 latency-bound pages: **987 ms → 90 ms (11×)** |
-| `page.warm(selectors)` | in-page parse cache; long selector chains also went O(n²) → O(n) |
-| `newPage({ capture: false })` | skips the Network domain entirely — lighter page + faster loads, no request log |
-| `velox.config({ timeout })` | one default for every action; override per page with `page.setDefaultTimeout(ms)` |
+Also in the fast path: the in-page engine ships **compacted** (25 KB → 22 KB per page),
+page setup is **single-flight** (the auto-attach race used to run it twice), engine
+injection is lazy (first use, and it self-heals), download plumbing arms only when a
+listener appears, and headless launches skip the GPU entirely.
 
 ### Bandwidth
 
@@ -658,6 +666,21 @@ proxy: { server: 'http://127.0.0.1:8080', bypass: ['<-loopback>'] }
 ```
 
 Remote proxies and remote targets are unaffected.
+</details>
+
+<details>
+<summary><b>What's the fastest possible setup?</b></summary>
+
+1. **Don't use a browser** — `velox.fetchAll(urls, { concurrency: 16, cache })` for
+   anything static: no renderer, no subresources, ETag revalidation.
+2. **If you need JS**, prewarm once and reuse: `await velox.prewarm({ browsers: 1, pagesPerBrowser: 8 })`,
+   then `goto(url, { waitUntil: 'none' })` + `waitForSelector(sel)`.
+3. **Trim the page** with a bandwidth profile (`text-only` cut a test page from
+   474 KB to 4.8 KB) and keep `capture: false` unless you need request logs.
+4. **Batch independent actions** with `page.batch([...])` instead of awaiting each.
+
+Measured: a static scrape with `fetchAll` is ~10× faster than one page per browser,
+and a JS-required scrape runs at ~33 ms/page including navigation and extraction.
 </details>
 
 <details>

@@ -97,7 +97,18 @@ export class VeloxPage extends Emitter {
 
   /* ------------------------------------------------ setup ----------------------------------------------- */
 
-  async _init(opts = {}) {
+  async _init(opts = {}, { force = false } = {}) {
+    // newPage() can race the auto-attach handler. Both used to run the whole setup
+    // concurrently (double enables, double script injection, double engine payload).
+    // The promise is memoized so only one batch ever flies, and `force` re-inits
+    // (used when adopting a pre-warmed page or after a reconnect).
+    if (force) { this._initPromise = null; this._initialized = false; }
+    if (this._initPromise) return this._initPromise;
+    this._initPromise = this._initOnce(opts).catch((e) => { this._initPromise = null; throw e; });
+    return this._initPromise;
+  }
+
+  async _initOnce(opts = {}) {
     const cfg = getConfig();
     opts = applyPageOptions({ capture: cfg.capture, ...opts });
     this._opts = opts;
@@ -134,11 +145,17 @@ export class VeloxPage extends Emitter {
     ];
     const freshScripts = initScripts.filter((src) => !this._initScriptSources.has(src));
     for (const src of freshScripts) this._initScriptSources.add(src);
+    // register for every future navigation; the CURRENT document (about:blank) is
+    // armed lazily on first eval — eval() auto-heals, so nothing is lost
     await Promise.all(freshScripts.map((src) => s.send('Page.addScriptToEvaluateOnNewDocument', { source: src })));
-    // and to the current document (about:blank) right now
-    await s.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
-    if (opts.stealth) await s.send('Runtime.evaluate', { expression: STEALTH_SOURCE }).catch(() => {});
-    if (opts.clock) await s.send('Runtime.evaluate', { expression: CLOCK_SOURCE }).catch(() => {});
+    if (!this._eagerEngine) {
+      // nothing to do — see DocumentedFastPath: waiting for the first navigation avoids
+      // shipping the engine twice per page (measured ~25 KB + one round-trip per page)
+    } else {
+      await s.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
+      if (opts.stealth) await s.send('Runtime.evaluate', { expression: STEALTH_SOURCE }).catch(() => {});
+      if (opts.clock) await s.send('Runtime.evaluate', { expression: CLOCK_SOURCE }).catch(() => {});
+    }
     if (opts.testIdAttribute && opts.testIdAttribute !== 'data-testid') {
       await s.send('Page.addScriptToEvaluateOnNewDocument', { source: `__vlx && (__vlx.testIdAttr = ${JSON.stringify(opts.testIdAttribute)})` }).catch(() => {});
       await s.send('Runtime.evaluate', { expression: `__vlx.testIdAttr = ${JSON.stringify(opts.testIdAttribute)}` }).catch(() => {});
@@ -171,18 +188,16 @@ export class VeloxPage extends Emitter {
     if (opts.timezone) await this.setTimezone(opts.timezone);
     if (opts.geolocation) await this.setGeolocation(opts.geolocation);
     if (opts.colorScheme) await this.colorScheme(opts.colorScheme);
-    if (opts.downloads !== false) {
-      const dir = typeof opts.downloads === 'string' ? opts.downloads : join(tmpdir(), 'velox-downloads');
-      try { mkdirSync(dir, { recursive: true }); } catch {}
-      this._downloads = dir;
-      await this.conn.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: dir, eventsEnabled: true }).catch(() => {});
-    }
+    // download plumbing is armed on first use (see _ensureDownloads) — it costs a
+    // round-trip per page that most runs never need. `downloads: true` forces it now.
+    if (opts.downloads === true) await this._ensureDownloads();
     // plugin network hooks arm interception only when a plugin actually wants them
     if (hasHook('onRequest')) this.route('**/*', (req) => { runHook('onRequest', req); if (!req._handled) req.continue(); });
     if (hasHook('onResponse')) this.on('response', (entry) => runHook('onResponse', entry));
     if (!this._pluginsRan) { this._pluginsRan = true; runHook('onPage', this); }
     // unpause if this target was auto-attached with waitForDebuggerOnStart
     s.fire('Runtime.runIfWaitingForDebugger');
+    this._initialized = true;
     return this;
   }
 
@@ -1204,6 +1219,33 @@ export class VeloxPage extends Emitter {
     if (!req._handled) req.continue().catch(() => {});
   }
 
+  /** Attaching a download listener arms download capture automatically. */
+  on(event, handler) {
+    if (event === 'download' || event === 'filechooser') this._ensureDownloads().catch(() => {});
+    return super.on(event, handler);
+  }
+
+  once(event, handler) {
+    if (event === 'download' || event === 'filechooser') this._ensureDownloads().catch(() => {});
+    return super.once(event, handler);
+  }
+
+  /** Arm download capture (idempotent). Called automatically by download-related APIs. */
+  async _ensureDownloads(opts = {}) {
+    if (this._downloads) return this._downloads;
+    const dir = typeof opts.downloads === 'string' ? opts.downloads : typeof this._opts?.downloads === 'string' ? this._opts.downloads : join(tmpdir(), 'velox-downloads');
+    try { mkdirSync(dir, { recursive: true }); } catch {}
+    this._downloads = dir;
+    await this.conn.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: dir, eventsEnabled: true }).catch(() => {});
+    return dir;
+  }
+
+  /** Wait for a download (arms download capture first). */
+  async waitForDownload(timeout = 30000) {
+    await this._ensureDownloads();
+    return this.waitForEvent('download', { timeout });
+  }
+
   /* ------------------------------------------ dialogs & files -------------------------------------------- */
 
   _onDialog(info) {
@@ -1317,7 +1359,7 @@ export class VeloxPage extends Emitter {
   waitForPopup(timeout = 30000) {
     return this.waitForEvent('popup', { timeout }).catch(() => this.waitForEvent('target', { timeout }));
   }
-  waitForDownload(timeout = 30000) { return this.waitForEvent('download', { timeout }); }
+
 
   /* ------------------------------------------ network emulation ------------------------------------------ */
 

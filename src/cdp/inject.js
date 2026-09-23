@@ -12,7 +12,8 @@
 //   id:             'id=main'      tag=div     nth=3
 //   chain (shadow+iframe pierce): 'div.host >> button.primary'
 //   filters:        'button:visible'  'a:has-text("read more")'
-export const ENGINE_SOURCE = String.raw`
+import { compactSource } from '../util.js';
+export const ENGINE_SOURCE_RAW = String.raw`
 (function () {
   if (window.__vlx) return;
   var V = {};
@@ -506,5 +507,9 @@ export const ENGINE_SOURCE = String.raw`
   window.__vlx = V;
 })();
 `;
+
+/** Readable source kept for debugging; pages receive the compacted form. */
+export const ENGINE_SOURCE = compactSource(ENGINE_SOURCE_RAW);
+
 
 export const ENGINE_CHECK = `typeof window.__vlx === 'object'`;

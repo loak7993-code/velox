@@ -1,7 +1,7 @@
 {
   "name": "velox-automation",
-  "version": "2.2.0",
-  "description": "Browser automation at terminal velocity. Zero dependencies: any installed Chrome/Chromium/Edge/Brave over CDP, or no browser at all. Playwright-compatible API with proxies (http/socks5 + rotating pools), bandwidth profiles (99% less traffic), conditional-GET caching, plugins and batching.",
+  "version": "2.3.0",
+  "description": "Browser automation at terminal velocity. Zero dependencies, any installed Chrome/Chromium/Edge/Brave over CDP or no browser at all. Playwright-compatible API with prewarmed browsers, batching, proxies (http/socks5 + pools), bandwidth profiles and conditional caching.",
   "type": "module",
   "main": "./src/index.js",
   "module": "./src/index.js",
@@ -33,7 +33,9 @@
     "test": "node test/run.js",
     "bench": "node test/bench.js",
     "site": "node test/site/serve.js",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm test",
+    "speed": "node test/speed.js",
+    "profile": "node test/profile.js"
   },
   "keywords": [
     "automation",

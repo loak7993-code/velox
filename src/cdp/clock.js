@@ -2,7 +2,8 @@
 // injected as an init script. fastForward() fires due timers without waiting.
 import { Emitter } from '../util.js';
 
-export const CLOCK_SOURCE = String.raw`
+import { compactSource } from '../util.js';
+export const CLOCK_SOURCE_RAW = String.raw`
 (function () {
   if (window.__vlxClock) return;
   var C = { offset: 0, fixed: null, running: true, seq: 1, tasks: new Map(), nowBase: performance.now() };
@@ -72,6 +73,10 @@ export const CLOCK_SOURCE = String.raw`
   window.__vlxClock = C;
 })();
 `;
+
+/** Readable source kept for debugging; pages receive the compacted form. */
+export const CLOCK_SOURCE = compactSource(CLOCK_SOURCE_RAW);
+
 
 /** Node-side controller for the injected clock. State re-applies after every navigation. */
 export class Clock {

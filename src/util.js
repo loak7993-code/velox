@@ -74,3 +74,28 @@ export function normHeaders(h = {}) {
 }
 
 export function isObj(o) { return o && typeof o === 'object' && !Array.isArray(o); }
+
+/**
+ * Compact an injected script without a parser: drops whole-line comments,
+ * indentation, blank lines and inline comments that sit outside quotes/URLs.
+ * Keeps the source readable in the repo while shipping fewer bytes per page.
+ */
+export function compactSource(src) {
+  const out = [];
+  for (let line of String(src).split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//')) continue;
+    // inline comment: only when the slash is not part of a URL and nothing before it
+    // looks like a string (cheap, conservative check)
+    const idx = trimmed.indexOf('//');
+    if (idx > 0) {
+      const before = trimmed.slice(0, idx);
+      const safe = !/["'`]/.test(before) && !before.endsWith(':');
+      if (safe && (before.endsWith(';') || before.endsWith('}') || before.endsWith(',') || before.endsWith(')'))) {
+        line = before;
+      }
+    }
+    out.push(line === trimmed ? trimmed : trimmed);
+  }
+  return out.join('\n');
+}

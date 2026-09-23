@@ -1,94 +1,159 @@
-// velox :: speed.js — micro-benchmarks for the v2.1 speed work
+// velox :: speed.js (v2.3) — the speed features, measured end to end
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
-import { fileURLToPath } from 'node:url';
-const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
-const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 
-
-const EXE = process.env.VELOX_BROWSER;
+const EXE = process.env.VELOX_BROWSER || process.env.VLOX_EXE;
 const site = await startSite();
 const S = site.url;
-const N = Number(process.argv[2] || 5);
+const N = Number(process.argv[2] || 8);
 const med = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
-const fmt = (a) => `${med(a).toFixed(1)}ms`;
-const results = [];
-const row = (name, seq, fast, note = '') => {
-  const speedup = med(seq) / med(fast);
-  results.push([name, med(seq), med(fast), speedup]);
-  console.log(`${speedup >= 1.05 ? '⚡' : ' '} ${name.padEnd(34)} sequential ${fmt(seq).padStart(8)}  |  velox ${fmt(fast).padStart(8)}  |  ${speedup.toFixed(2)}×  ${note}`);
+const fmt = (n) => `${n.toFixed(1)} ms`;
+const out = [];
+const row = (label, before, after, note = '') => {
+  const mb = med(before), ma = med(after);
+  const x = mb / Math.max(ma, 0.01);
+  out.push([label, mb, ma, x]);
+  console.log(`${x >= 1.05 ? '⚡' : ' '} ${label.padEnd(38)} before ${fmt(mb).padStart(9)}  |  v2.3 ${fmt(ma).padStart(9)}  |  ${x.toFixed(2)}×  ${note}`);
 };
 
-const b = await velox.launch({ executablePath: EXE });
-
-/* ── 1. batch(): independent actions over one flush ─────────────────────────── */
+/* ── 1. page creation: cold vs the transparent spare ─────────────────────── */
 {
-  const seq = [], fast = [];
+  const before = [], after = [];
   for (let i = 0; i < N; i++) {
-    let p = await b.newPage();
-    await p.setContent('<input id=a><input id=b><input id=c><h1>H</h1><p class=x>1</p><p class=x>2</p>');
-    let t0 = Date.now();
-    await p.fill('#a', '1'); await p.fill('#b', '2'); await p.fill('#c', '3'); await p.text('h1'); await p.count('p.x');
-    seq.push(Date.now() - t0);
-    t0 = Date.now();
-    await p.batch([['fill', '#a', '1'], ['fill', '#b', '2'], ['fill', '#c', '3'], ['text', 'h1'], ['count', 'p.x']]);
-    fast.push(Date.now() - t0);
-    await p.close();
+    const b = await velox.launch({ executablePath: EXE, spare: 0 });     // no spare: the old path
+    let t = Date.now(); const p = await b.newPage({ capture: false }); before.push(Date.now() - t);
+    await p.close(); await b.close();
   }
-  row('5 independent actions (batch)', seq, fast, 'one pipelined flush');
+  for (let i = 0; i < N; i++) {
+    const b = await velox.launch({ executablePath: EXE });              // spare on (default)
+    await new Promise((r) => setTimeout(r, 60));                        // let it warm
+    let t = Date.now(); const p = await b.newPage({ capture: false }); after.push(Date.now() - t);
+    await p.close(); await b.close();
+  }
+  row('newPage()', before, after, 'spare renderer, transparent');
 }
 
-/* ── 2. warm(): pre-parsed selectors in the page ───────────────────────────── */
+/* ── 2. launch: cold vs prewarmed ────────────────────────────────────────── */
 {
-  const body = Array.from({ length: 400 }, (_, i) => `<div class="card c${i % 7}"><span class=t>item ${i}</span></div>`).join('');
-  const cold = [], warm = [];
+  const before = [], after = [];
+  for (let i = 0; i < N; i++) { const t = Date.now(); const b = await velox.launch({ executablePath: EXE }); before.push(Date.now() - t); await b.close(); }
   for (let i = 0; i < N; i++) {
-    let p = await b.newPage({ capture: false });
-    await p.setContent(body);
-    let t0 = Date.now();
-    await p.eval(`(function(){for(var i=0;i<200;i++){__vlx.match('.card.c3 >> .t');__vlx.match('div.card:visible');__vlx.extract('span.t',{text:true,limit:50})}return 1})()`);
-    cold.push(Date.now() - t0);
-    await p.warm(['.card.c3 >> .t', 'div.card:visible', 'span.t']);
-    t0 = Date.now();
-    await p.eval(`(function(){for(var i=0;i<200;i++){__vlx.match('.card.c3 >> .t');__vlx.match('div.card:visible');__vlx.extract('span.t',{text:true,limit:50})}return 1})()`);
-    warm.push(Date.now() - t0);
-    await p.close();
+    await velox.prewarm({ browsers: 1, launch: {}, executablePath: EXE });
+    const t = Date.now(); const b = await velox.launch({ executablePath: EXE }); after.push(Date.now() - t); await b.close();
   }
-  row('200× selector parse+cache (in-page)', cold, warm, 'warm()/parse cache');
+  row('launch() + first page handoff', before, after, 'velox.prewarm()');
 }
 
-/* ── 3. capture:false — lighter page + navigation ──────────────────────────── */
+/* ── 3. per-action round-trips ───────────────────────────────────────────── */
 {
-  const on = [], off = [];
+  const b = await velox.launch({ executablePath: EXE });
+  const p = await b.newPage({ capture: false });
+  await p.goto(S + '/', { waitUntil: 'interactive' });
+  const seq = [], batched = [];
   for (let i = 0; i < N; i++) {
-    let t0 = Date.now();
-    let p = await b.newPage();
-    await p.goto(S + '/heavy.html', { waitUntil: 'interactive' });
-    on.push(Date.now() - t0); await p.close();
-    t0 = Date.now();
-    p = await b.newPage({ capture: false });
-    await p.goto(S + '/heavy.html', { waitUntil: 'interactive' });
-    off.push(Date.now() - t0); await p.close();
+    let t = Date.now();
+    await p.text('h1'); await p.count('a'); await p.attr('h1', 'id'); await p.exists('p');
+    seq.push(Date.now() - t);
+    t = Date.now();
+    await p.batch([['text', 'h1'], ['count', 'a'], ['attr', 'h1', 'id'], ['exists', 'p']]);
+    batched.push(Date.now() - t);
   }
-  row('page create + goto (capture off)', on, off, 'no Network domain');
+  row('4 data actions', seq, batched, 'page.batch() one flush');
+  await b.close();
 }
 
-/* ── 4. fetchAll(): parallel lite fetches, no browser ──────────────────────── */
+/* ── 4. navigation shape ─────────────────────────────────────────────────── */
 {
-  const urls = Array.from({ length: 24 }, (_, i) => `${S}/api/delay?ms=40&i=${i}`);
+  const b = await velox.launch({ executablePath: EXE });
+  const interactive = [], turbo = [];
+  for (let i = 0; i < N; i++) {
+    const p1 = await b.newPage({ capture: false });
+    let t = Date.now(); await p1.goto(S + '/', { waitUntil: 'interactive' }); interactive.push(Date.now() - t); await p1.close();
+    const p2 = await b.newPage({ capture: false });
+    t = Date.now();
+    await p2.goto(S + '/', { waitUntil: 'none' });
+    await p2.waitForSelector('h1');
+    turbo.push(Date.now() - t); await p2.close();
+  }
+  row('navigate + first paint + ready', interactive, turbo, 'waitUntil:"none" + waitForSelector');
+  await b.close();
+}
+
+/* ── 5. screenshots ──────────────────────────────────────────────────────── */
+{
+  const b = await velox.launch({ executablePath: EXE });
+  const p = await b.newPage({ capture: false });
+  await p.goto(S + '/', { waitUntil: 'interactive' });
+  const def = [], fast = [];
+  for (let i = 0; i < N; i++) { let t = Date.now(); await p.screenshot(); def.push(Date.now() - t); }
+  for (let i = 0; i < N; i++) { let t = Date.now(); await p.screenshot({ fast: true }); fast.push(Date.now() - t); }
+  row('viewport screenshot', def, fast, 'fast:true');
+  await b.close();
+}
+
+/* ── 6. browser-free scraping ────────────────────────────────────────────── */
+{
+  const urls = Array.from({ length: 24 }, (_, i) => `${S}/api/delay?ms=30&i=${i}`);
   const seq = [], par = [];
-  for (let i = 0; i < N; i++) {
-    let t0 = Date.now();
+  for (let i = 0; i < 4; i++) {
+    let t = Date.now();
     for (const u of urls) await velox.fetch(u);
-    seq.push(Date.now() - t0);
-    t0 = Date.now();
-    await velox.fetchAll(urls, { concurrency: 12 });
-    par.push(Date.now() - t0);
+    seq.push(Date.now() - t);
+    t = Date.now();
+    await velox.fetchAll(urls, { concurrency: 16 });
+    par.push(Date.now() - t);
   }
-  row('24 lite fetches', seq, par, 'fetchAll() keep-alive');
+  row('24 latency-bound pages', seq, par, 'fetchAll(), no browser');
+
+  const cached = [];
+  for (let i = 0; i < 4; i++) {
+    const cache = velox.createCache();
+    let t = Date.now();
+    const u = `${S}/index.html`;
+    await velox.fetch(u, { cache });
+    await velox.fetch(u, { cache });
+    cached.push(Date.now() - t);
+  }
+  const fresh = [];
+  for (let i = 0; i < 4; i++) {
+    let t = Date.now();
+    await velox.fetch(`${S}/index.html`);
+    await velox.fetch(`${S}/index.html`);
+    fresh.push(Date.now() - t);
+  }
+  row('2× fetch same page', fresh, cached, 'ETag → 304 from cache');
 }
 
-await b.close();
-site.server.close();
-console.log('\n' + results.map(([n, a, b_, s]) => `${n.padEnd(34)} ${s.toFixed(2)}×`).join('\n'));
+/* ── 7. whole workflow: 12 pages, page-per-scrape ────────────────────────── */
+{
+  const slow = [];
+  const b1 = await velox.launch({ executablePath: EXE, spare: 0 });
+  for (let i = 0; i < 12; i++) {
+    const t = Date.now();
+    const p = await b1.newPage({ capture: false });
+    await p.goto(`${S}/page2.html`, { waitUntil: 'none' });
+    await p.waitForSelector('h1');
+    const title = await p.text('h1');
+    await p.close();
+    slow.push(Date.now() - t);
+  }
+  await b1.close();
+  const fast = [];
+  const b2 = await velox.launch({ executablePath: EXE });
+  for (let i = 0; i < 12; i++) {
+    const t = Date.now();
+    const p = await b2.newPage({ capture: false });
+    await p.goto(`${S}/page2.html`, { waitUntil: 'none' });
+    await p.waitForSelector('h1');
+    const title = await p.text('h1');
+    await p.close();
+    fast.push(Date.now() - t);
+  }
+  await b2.close();
+  row('12 pages: open→navigate→read', slow, fast, 'spare renderers');
+}
+
+await site.server.close();
+console.log('\nsummary:');
+for (const [l, b, a, x] of out) console.log(`  ${l.padEnd(38)} ${x.toFixed(2)}×  (${b.toFixed(0)} → ${a.toFixed(0)} ms)`);
 process.exit(0);

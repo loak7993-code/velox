@@ -1,6 +1,7 @@
 // velox :: cdp/stealth.js — anti-fingerprint patches, injected before page scripts.
 // Pure from-scratch implementation (no code from puppeteer-extra/stealth).
-export const STEALTH_SOURCE = String.raw`
+import { compactSource } from '../util.js';
+export const STEALTH_SOURCE_RAW = String.raw`
 (function () {
   if (window.__vlxStealth) return; window.__vlxStealth = true;
   var def = function (obj, prop, value) {
@@ -125,3 +126,7 @@ export const STEALTH_SOURCE = String.raw`
   } catch (e) {}
 })();
 `;
+
+/** Readable source kept for debugging; pages receive the compacted form. */
+export const STEALTH_SOURCE = compactSource(STEALTH_SOURCE_RAW);
+

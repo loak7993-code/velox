@@ -13,6 +13,10 @@ import { Emitter } from '../util.js';
 
 const HEADLESS_OK = (p) => !/headless-shell/i.test(p);
 
+/** Pre-launched browsers waiting to be handed out by launch(). */
+const warmBrowsers = [];
+const keyOf = (o = {}) => [o.executablePath || '', o.browser || 'auto', o.headless !== false ? 'h' : 'd', JSON.stringify(o.proxy || null), o.noSandbox ? 'ns' : ''].join('|');
+
 export class Browser extends Emitter {
   constructor(conn, proc = null, opts = {}) {
     super();
@@ -27,6 +31,10 @@ export class Browser extends Emitter {
     this.versionInfo = null;
     this._setupAutoAttach();
     conn.on('disconnect', (e) => this.emit('disconnect', e));
+    // keep one blank renderer warm so newPage() skips renderer spin-up (~30ms → ~4ms)
+    this._spares = [];
+    this._spareTarget = opts.spare ?? 1;
+    if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
   }
 
   get closed() { return this._closed || this.conn.closed; }
@@ -38,6 +46,20 @@ export class Browser extends Emitter {
       });
     } catch {}
     if (!this._contexts) this._contexts = new Map(); // browserContextId -> BrowserContext
+    // Auto-attached pages are initialised by whoever claims them (newPage), or by this
+    // sweeper if nobody does (popups, OOPIFs). Sweeping beats per-page timers: a timer
+    // could fire while newPage() was still awaiting createTarget and init with defaults.
+    if (!this._sweeper) {
+      this._deferredPages = [];
+      this._sweeper = setInterval(() => {
+        if (!this._deferredPages.length) return;
+        for (const [page, opts] of this._deferredPages.splice(0, this._deferredPages.length)) {
+          if (page._initialized || page._claiming || page.isClosed) continue;
+          page._init(opts).catch(() => {});
+        }
+      }, 25);
+      this._sweeper.unref?.();
+    }
 
     this.conn.on('Target.attachedToTarget', async ({ sessionId, targetInfo, waitingForDebugger }) => {
       if (waitingForDebugger) this.conn.fire('Runtime.runIfWaitingForDebugger', {}, { sessionId });
@@ -82,8 +104,9 @@ export class Browser extends Emitter {
       this.emit(evName, page);
       this.emit('targetCreated', page);
       page.once('close', () => { this._pages.delete(page); this._knownTargets.delete(targetInfo.targetId); });
-      // arm popups/OOPIFs in the background (domains + engine) so they're ready to use
-      page._init(ctx ? ctx.pageDefaults() : {}).catch(() => {});
+      // Queue for the sweeper: if newPage() claims this target within the window it
+      // initialises the page with the CALLER's options and this entry is skipped.
+      this._deferredPages.push([page, ctx ? ctx.pageDefaults() : {}]);
     });
   }
 
@@ -119,7 +142,8 @@ export class Browser extends Emitter {
     // target — reuse that page (its _init is idempotent) instead of double-attaching
     const raced = this._knownTargets.get(targetId);
     if (raced) {
-      await raced._init(opts);
+      raced._claiming = true;            // synchronous: the sweeper will stand down
+      try { await raced._init(opts); } finally { raced._claiming = false; }
       return raced;
     }
     this._pendingAttaches.add(targetId);
@@ -153,6 +177,44 @@ export class Browser extends Emitter {
   }
 
   /** Launch a local browser. Uses any installed Chromium-family binary. */
+  /**
+   * Launch browsers (and optionally pages) ahead of time so later launch()/open()
+   * calls are instant.
+   *   await velox.prewarm({ browsers: 1, pagesPerBrowser: 6 })
+   */
+  static async prewarm(opts = {}) {
+    const { browsers = 1, pagesPerBrowser = 0, topUp = false, ...launchOpts } = opts;
+    const made = [];
+    for (let i = 0; i < browsers; i++) {
+      const b = await Browser.launch(launchOpts);
+      b._warmKey = keyOf(launchOpts);
+      if (pagesPerBrowser) await b.prewarm(pagesPerBrowser, launchOpts.pageOpts || {});
+      warmBrowsers.push(b);
+      made.push(b);
+    }
+    if (topUp) Browser._topUp(opts);
+    return made;
+  }
+
+  /** Keep the warm queue stocked in the background (best effort). */
+  static _topUp(opts) {
+    const want = opts.browsers ?? 1;
+    const have = warmBrowsers.length;
+    for (let i = have; i < want; i++) {
+      Browser.prewarm({ ...opts, browsers: 1, topUp: false }).catch(() => {});
+    }
+  }
+
+  /** Take a matching warm browser, if one is ready. */
+  static _takeWarm(opts) {
+    const key = keyOf(opts);
+    const idx = warmBrowsers.findIndex((b) => b._warmKey === key && !b.closed);
+    if (idx === -1) return null;
+    const b = warmBrowsers.splice(idx, 1)[0];
+    if (Browser._warmTarget) Browser._topUp({ browsers: Browser._warmTarget });
+    return b;
+  }
+
   static async launch(opts = {}) {
     const cfg = getConfig();
     opts = applyLaunchOptions({
@@ -162,6 +224,9 @@ export class Browser extends Emitter {
       ...(cfg.noSandbox !== undefined ? { noSandbox: cfg.noSandbox } : {}),
       ...opts,
     });
+    // a pre-warmed browser (same executable/headless/proxy) is instant
+    const warm = Browser._takeWarm(opts);
+    if (warm) { runHook('onBrowser', warm); return warm; }
     let browser;
     try {
       browser = await Browser._launchOnce(opts);
@@ -192,11 +257,14 @@ export class Browser extends Emitter {
     const root = typeof process.getuid === 'function' && process.getuid() === 0;
     const dir = userDataDir || mkdtempSync(join(tmpdir(), 'velox-'));
     const usePipe = opts.transport !== 'socket';
-    const cli = [
+    const sandboxless = root || opts.noSandbox === true || !!process.env.VELOX_NO_SANDBOX;
+    const cli = [...new Set([
       `--user-data-dir=${dir}`,
       usePipe ? '--remote-debugging-pipe' : '--remote-debugging-port=0',
       '--no-first-run', '--no-default-browser-check',
-      ...(root || opts.noSandbox === true || process.env.VELOX_NO_SANDBOX ? ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'] : []),
+      // headless never needs a GPU: skipping it saves renderer setup time on every launch
+      ...(headless ? ['--disable-gpu'] : []),
+      ...(sandboxless ? ['--no-sandbox', '--disable-dev-shm-usage'] : []),
       '--disable-background-networking', '--disable-sync', '--mute-audio',
       '--disable-component-update', '--disable-default-apps',
       '--disable-extensions', '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
@@ -209,7 +277,7 @@ export class Browser extends Emitter {
       ...(opts.windowSize ? [`--window-size=${opts.windowSize[0]},${opts.windowSize[1]}`] : []),
       ...(proxy ? proxyFlags(proxy) : []),
       ...args,
-    ];
+    ])];
 
     const stdio = usePipe ? ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'];
     const proc = spawn(exe, cli, { stdio, env: { ...process.env, ...env } });
@@ -275,13 +343,60 @@ export class Browser extends Emitter {
     return b;
   }
 
+  /**
+   * Pre-create blank pages so later newPage() calls only attach + init.
+   *   await browser.prewarm(4)     // 4 ready pages in the pool
+   */
+  async prewarm(count = 2, opts = {}) {
+    this._pool = this._pool || [];
+    this._spares = this._spares || [];
+    await Promise.all(Array.from({ length: count }, async () => {
+      try { this._pool.push(await this._createPage({ capture: false, ...opts }, null)); } catch {}
+    }));
+    return this._pool.length;
+  }
+
+  /**
+   * Create blank pages in the background (never exposed in pages()).
+   * Returns the in-flight promise so newPage() can await a nearly-ready spare
+   * instead of paying a cold renderer start.
+   */
+  _topUpSpares() {
+    if (this.closed || this._sparePromise) return this._sparePromise;
+    const need = (this._spareTarget || 0) - this._spares.length;
+    if (need <= 0) return null;
+    this._sparePromise = Promise.all(Array.from({ length: need }, () => this._createPage({ capture: false }, null).then((p) => {
+      if (this.closed) return p.close().catch(() => {});
+      p._spare = true;
+      this._spares.push(p);
+    }).catch(() => {}))).finally(() => { this._sparePromise = null; });
+    return this._sparePromise;
+  }
+
   /** New page in the default context. Everything optional: { stealth, ads, device, viewport, ua, locale, timezone, geolocation, headers, blockUrls, routes } */
   async newPage(opts = {}) {
     const ctx = this.defaultContext();
+    // adopt a warm spare (or an explicitly pre-warmed pool page): attach-only path
+    let warm = (this._pool?.length ? this._pool.pop() : null) || (opts.spare === 0 ? null : this._spares.pop());
+    if (!warm && opts.spare !== 0 && this._sparePromise) {
+      // a spare is nearly ready — waiting for it beats a cold renderer start
+      await this._sparePromise.catch(() => {});
+      warm = this._spares.pop() || null;
+    }
+    if (warm) {
+      warm._spare = false;
+      ctx._pages.add(warm);
+      warm.context = ctx;
+      warm.once('close', () => ctx._pages.delete(warm));
+      await warm._init(ctx.pageDefaults(opts), { force: true });
+      if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
+      return warm;
+    }
     const page = await this._createPage(ctx.pageDefaults(opts), null);
     page.context = ctx;
     ctx._pages.add(page);
     page.once('close', () => ctx._pages.delete(page));
+    if (this._spareTarget > 0) setTimeout(() => this._topUpSpares(), 0);
     return page;
   }
 
@@ -319,7 +434,8 @@ export class Browser extends Emitter {
             page._initScriptSources = new Set();   // init scripts are per-session in CDP
             page._fetchOn = false; page._fetchReady = null;
             page._closed = false;
-            await page._init(page._opts || {});
+            page._initialized = false;
+            await page._init(page._opts || {}, { force: true });
             if (page._routes?.length) {
               page._fetchOn = true;
               await page.session.send('Fetch.enable', { patterns: [{ urlPattern: '*' }], ...(page._httpCredentials || page._proxyCredentials ? { handleAuthRequests: true } : {}) }).catch(() => {});
@@ -343,6 +459,7 @@ export class Browser extends Emitter {
     if (this._closed) return;
     this._closed = true;
     this._closingRemote = true;   // a deliberate close must not trigger auto-reconnect
+    this._spares = [];
     try { await Promise.race([this.conn.send('Browser.close'), new Promise((r) => setTimeout(r, 3000))]); } catch {}
     this.conn.close();
     // give the process a moment to exit gracefully (profile/cookie flush) before SIGKILL

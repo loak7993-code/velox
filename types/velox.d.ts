@@ -186,6 +186,8 @@ declare module 'velox' {
     browser?: string;
     transport?: 'pipe' | 'socket';
     noSandbox?: boolean;
+    /** Blank renderers kept warm so newPage() is ~2ms. Default 1, 0 disables. */
+    spare?: number;
     executablePath?: string;
     headless?: boolean;
     args?: string[];
@@ -295,6 +297,8 @@ declare module 'velox' {
     transferred(): { total: number; byType: Record<string, number>; human: string; blockedBytes: number; blocked: Record<string, number>; profile: string };
     blockedRequests(): { reason: string; count: number }[];
     setBandwidth(profile: PageOptions['bandwidth']): Promise<VeloxPage>;
+    prewarm(count?: number, opts?: PageOptions): Promise<number>;
+    waitForDownload(timeout?: number): Promise<Download>;
     healthy(opts?: { timeout?: number }): Promise<boolean>;
     reconnect(opts?: { attempts?: number; delay?: number }): Promise<Browser>;
     count(sel: string): Promise<number>;
@@ -536,6 +540,8 @@ declare module 'velox' {
     plugins: Record<string, any>;
     registerDevice(name: string, def: Device): Device;
     createCache(opts?: { dir?: string; ttl?: number; maxEntries?: number; maxBytes?: number }): HttpCache;
+    /** Pre-launch browsers (and optionally pages) so launch()/open() are instant. */
+    prewarm(opts?: LaunchOptions & { browsers?: number; pagesPerBrowser?: number }): Promise<Browser[]>;
     BANDWIDTH: Record<'full' | 'lean' | 'minimal' | 'text-only', BandwidthRules>;
     fmtBytes(n: number): string;
     Browser: any;
