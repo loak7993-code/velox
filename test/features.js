@@ -222,6 +222,11 @@ process.stdout.write(JSON.stringify({ engine: c.engine, timeout: c.timeout }));`
   return true;
 });
 
+await soft('velox.version matches package.json', async () => {
+  const pkg = (await import('node:fs')).readFileSync('/tmp/opencode/velox/package.json', 'utf8');
+  return velox.version === JSON.parse(pkg).version;
+});
+
 site.server.close();
 const fails = results.filter(([, ok]) => !ok);
 console.log(`\n${results.length - fails.length}/${results.length} passed`);

@@ -13,6 +13,8 @@ import { open, scrape, LiteSession, BrowserSession } from './auto.js';
 import { fetch as liteFetch, fetchAll as liteFetchAll, CookieJar, needsJS } from './lite/engine.js';
 import { parse as parseHtml } from './lite/html.js';
 import { expect } from './assert.js';
+import { createRequire } from 'node:module';
+const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
 import { config, getConfig, use, registerDevice, registeredDevices, plugins as pluginPresets, registeredPluginList } from './plugins.js';
 
@@ -61,7 +63,7 @@ const velox = {
   WebSocketTracker,
   Download,
   ENGINE_SOURCE,
-  get version() { return '2.0.0'; },
+  get version() { return pkg.version; },
 };
 
 export {
