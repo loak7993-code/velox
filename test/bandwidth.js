@@ -70,8 +70,9 @@ await soft('blockThirdParty drops off-site requests', async () => {
   const p = await b.newPage({ bandwidth: { block: [], blockThirdParty: true } });
   const blocked = [];
   p.on('blocked', (e) => blocked.push(e));
-  await p.goto(`${S}/heavy.html`, { waitUntil: 'load' }).catch(() => {});
-  await p.wait(500);
+  await p.goto(`${S}/heavy.html`, { waitUntil: 'interactive' }).catch(() => {});
+  // event-driven instead of a fixed sleep: the third-party image may load late on CI
+  await p.waitForEvent('blocked', { timeout: 8000, predicate: (e) => e.reason.startsWith('third-party') }).catch(() => null);
   const third = blocked.filter((x) => x.reason.startsWith('third-party'));
   check('third-party request blocked', third.length >= 1, JSON.stringify(blocked.map((b) => b.reason)));
   check('block reason recorded', p.blockedRequests().some((r) => r.reason.startsWith('third-party')));
