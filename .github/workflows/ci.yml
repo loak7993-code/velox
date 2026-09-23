@@ -23,6 +23,9 @@ jobs:
           python3 -m zipfile -e /tmp/hs.zip "$HOME/.browsers"
           chmod +x "$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell"
           echo "VELOX_BROWSER=$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
+          # Ubuntu 24.04 runners restrict the unprivileged sandbox; velox would
+          # self-heal by retrying with --no-sandbox, this just skips the wasted spawn
+          echo "VELOX_NO_SANDBOX=1" >> "$GITHUB_ENV"
 
       - name: Verify zero dependencies
         run: |

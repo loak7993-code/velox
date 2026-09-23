@@ -151,8 +151,22 @@ export class Browser extends Emitter {
 
   /** Launch a local browser. Uses any installed Chromium-family binary. */
   static async launch(opts = {}) {
+    try {
+      return await Browser._launchOnce(opts);
+    } catch (e) {
+      // Ubuntu 23.10+/containers/WSL restrict the unprivileged sandbox. If Chrome
+      // says it can't sandbox, relaunch with --no-sandbox instead of failing.
+      if (!opts.noSandbox && /usable sandbox|zygote_host|new namespace|sandbox/i.test(e.message)) {
+        return Browser._launchOnce({ ...opts, noSandbox: true });
+      }
+      throw e;
+    }
+  }
+
+  static async _launchOnce(opts = {}) {
     const {
-      browser = 'auto', headless = true, executablePath,
+      // VELOX_BROWSER is a true default: an explicit opts.browser/executablePath still wins
+      browser = process.env.VELOX_BROWSER || 'auto', headless = true, executablePath,
       args = [], userDataDir, proxy, userAgent, timeout = 20000,
       env = {}, stealth = false, defaultContext,
     } = opts;
@@ -166,7 +180,7 @@ export class Browser extends Emitter {
       `--user-data-dir=${dir}`,
       usePipe ? '--remote-debugging-pipe' : '--remote-debugging-port=0',
       '--no-first-run', '--no-default-browser-check',
-      ...(root || opts.noSandbox === true ? ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'] : []),
+      ...(root || opts.noSandbox === true || process.env.VELOX_NO_SANDBOX ? ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'] : []),
       '--disable-background-networking', '--disable-sync', '--mute-audio',
       '--disable-component-update', '--disable-default-apps',
       '--disable-extensions', '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
@@ -194,7 +208,7 @@ export class Browser extends Emitter {
       if (!alive) {
         // pipe unavailable in this environment (wrapper/constrained spawn) → fall back to port
         try { proc.kill('SIGKILL'); } catch {}
-        return await Browser.launch({ ...opts, transport: 'socket' });
+        return await Browser._launchOnce({ ...opts, transport: 'socket' });
       }
     } else {
       const wsUrl = await new Promise((resolve, reject) => {

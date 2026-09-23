@@ -459,10 +459,22 @@ session manually with `await session.upgrade()`.
 </details>
 
 <details>
-<summary><b>Running as root / in a container?</b></summary>
+<summary><b>Running as root, in Docker, on Ubuntu 24.04+ or WSL?</b></summary>
 
 Velox auto-adds `--no-sandbox --disable-gpu --disable-dev-shm-usage` when the
-UID is 0, so CI and Docker just work.
+UID is 0. As a normal user on distros that restrict unprivileged namespaces
+(Ubuntu 23.10+, some containers), Chrome refuses to start with
+`FATAL: No usable sandbox!` — velox detects that and **relaunches with
+`--no-sandbox` automatically**. Force it up front with `VELOX_NO_SANDBOX=1`
+(or `velox.launch({ noSandbox: true })`) to skip the failed first attempt.
+</details>
+
+<details>
+<summary><b>How do I pin which browser it uses?</b></summary>
+
+Precedence: `executablePath` option → `browser` option → `VELOX_BROWSER`
+environment variable → auto-discovery. So `VELOX_BROWSER=/usr/bin/brave-browser`
+works for every `velox.open`/`velox.launch()` call without touching your code.
 </details>
 
 <details>
