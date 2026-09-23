@@ -28,14 +28,17 @@ rmSync(LOG, { force: true }); rmSync(N, { force: true });
 
 spawnSync(process.execPath, ['-e', `
   import('./src/index.js').then(async (m) => {
-    try { await m.default.launch({ executablePath: '${STUB}', timeout: 2500 }); } catch {}
+    // force socket transport so every attempt is a plain spawn+probe — the pipe
+    // probe would add its own fallback spawn and muddy the attempt log
+    try { await m.default.launch({ executablePath: '${STUB}', transport: 'socket', timeout: 1500 }); } catch {}
     process.exit(0);
   });
 `], { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, VELOX_NO_SANDBOX: '' } });
 
 const attempts = existsSync(LOG) ? readFileSync(LOG, 'utf8').trim().split('\n') : [];
 check('sandbox failure triggers a retry', attempts.length === 2, `${attempts.length} attempt(s)`);
-check('retry adds --no-sandbox', attempts[1]?.includes('--no-sandbox'), attempts[1] || '');
+check('first attempt runs sandboxed', !attempts[0]?.includes('--no-sandbox') || process.getuid?.() === 0, attempts[0]?.slice(0, 60));
+check('retry adds --no-sandbox', attempts[1]?.includes('--no-sandbox') === true, attempts[1]?.slice(0, 60));
 rmSync(STUB, { force: true }); rmSync(LOG, { force: true }); rmSync(N, { force: true });
 
 // ── 2. VELOX_BROWSER must be honoured even though opts.browser defaults to 'auto'
