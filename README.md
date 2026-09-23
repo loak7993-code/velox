@@ -1,7 +1,8 @@
 <div align="center">
 
-<img src="assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
+<img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
+[![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
 [![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
@@ -40,7 +41,7 @@ The speed comes from architecture, not micro-optimization — see
 ## The 60-second tour
 
 ```js
-import velox from 'velox';
+import velox from 'velox-automation';
 
 // ① Open a URL. No browser launches unless the page needs JavaScript.
 const page = await velox.open('https://example.com');
@@ -66,7 +67,9 @@ await browser.close();
 ## Installation
 
 ```bash
-npm install github:loak7993-code/velox
+npm i velox-automation          # from npm
+# or straight from the repo
+npm i github:loak7993-code/velox
 ```
 
 Node ≥ 20 (22+ recommended — uses the native `WebSocket`). No postinstall, no
@@ -284,7 +287,7 @@ Static pages never touch the pool — the auto engine fetches them in-process.
 ### Assertions
 
 ```js
-import { expect } from 'velox';
+import { expect } from 'velox-automation';
 
 await expect(p.getByRole('heading')).toHaveText('Example Domain');
 await expect(p.locator('li')).toHaveCount(3);

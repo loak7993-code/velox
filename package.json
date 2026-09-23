@@ -1,7 +1,7 @@
 {
-  "name": "velox",
-  "version": "1.0.0",
-  "description": "Browser automation at terminal velocity. Zero dependencies. Any Chromium-family browser. Or no browser at all.",
+  "name": "velox-automation",
+  "version": "2.0.0",
+  "description": "Browser automation at terminal velocity. Zero dependencies: drives any installed Chrome/Chromium/Edge/Brave over CDP, or skips the browser entirely for static pages. Playwright-compatible API with contexts, locators, network mocking, video and tracing.",
   "type": "module",
   "main": "./src/index.js",
   "module": "./src/index.js",
@@ -17,6 +17,7 @@
     "./lite": "./src/lite/engine.js",
     "./cdp": "./src/cdp/browser.js"
   },
+  "icon": "assets/icon.png",
   "engines": {
     "node": ">=20"
   },
@@ -24,24 +25,40 @@
     "src",
     "bin",
     "types",
-    "assets",
+    "assets/icon.png",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node test/run.js",
     "bench": "node test/bench.js",
-    "site": "node test/site/serve.js"
+    "site": "node test/site/serve.js",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "automation",
+    "browser-automation",
     "scraping",
+    "web-scraping",
     "cdp",
-    "browser",
+    "chrome-devtools-protocol",
+    "headless",
+    "headless-chrome",
     "playwright",
+    "playwright-alternative",
     "puppeteer",
+    "puppeteer-alternative",
+    "selenium",
+    "zero-dependencies",
+    "no-dependencies",
     "fast",
-    "zero-dependencies"
+    "locators",
+    "stealth",
+    "screenshot",
+    "pdf",
+    "har",
+    "tracing",
+    "cli"
   ],
   "repository": {
     "type": "git",
@@ -53,5 +70,7 @@
   "homepage": "https://github.com/loak7993-code/velox#readme",
   "author": "loak7993",
   "license": "MIT",
-  "icon": "assets/logo-512.png"
+  "publishConfig": {
+    "access": "public"
+  }
 }

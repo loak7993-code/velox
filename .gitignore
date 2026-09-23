@@ -7,3 +7,4 @@ examples/full.png
 examples/page.pdf
 .cdp-test/
 .site-url
+*.tgz
