@@ -1576,8 +1576,8 @@ export class Download {
     const { copyFileSync, mkdirSync, existsSync } = await import('node:fs');
     const { dirname } = await import('node:path');
     // the browser renames its .crdownload temp to the guid name shortly AFTER
-    // reporting 'completed' — poll briefly for the file to appear
-    const deadline = Date.now() + 5000;
+    // reporting 'completed' — poll for the file (loaded machines can be slow to flush)
+    const deadline = Date.now() + 15000;
     while (!existsSync(src) && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 100));
     }

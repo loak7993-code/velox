@@ -29,6 +29,10 @@ async function measure(profile) {
   const nav = await p.goto(`${S}/heavy.html`, { waitUntil: 'interactive', timeout: 25000 })
     .catch((e) => ({ error: e.message }));
   await p.waitForFunction(`!!document.getElementById('heavy')`, { timeout: 10000 }).catch(() => {});
+  // wait for the first byte to be recorded, then let the rest settle: measuring a
+  // page that has not transferred anything yet would report a bogus 0 B
+  await p.waitForFunction('true', { timeout: 1000 }).catch(() => {});
+  for (let i = 0; i < 40 && !p.requests().length; i++) await p.wait(50);
   await p.wait(900);                                   // let subresources resolve / get blocked
   const t = p.transferred();
   const reqs = p.requests().length;
