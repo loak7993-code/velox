@@ -67,10 +67,12 @@ await browser.close();
 ## Installation
 
 ```bash
-npm i velox-automation          # from npm
+npm i velox-automation          # https://www.npmjs.com/package/velox-automation
 # or straight from the repo
 npm i github:loak7993-code/velox
 ```
+
+Published package: **[`velox-automation`](https://www.npmjs.com/package/velox-automation)** — 146 kB packed, no install scripts, no dependencies.
 
 Node ≥ 20 (22+ recommended — uses the native `WebSocket`). No postinstall, no
 browser download. Velox finds what's already on the machine:

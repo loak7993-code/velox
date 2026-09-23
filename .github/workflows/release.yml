@@ -6,11 +6,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write        # npm provenance attestation
+      contents: write      # create the GitHub Release
+      id-token: write      # npm provenance attestation
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,16 +30,39 @@ jobs:
           chmod +x "$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell"
           echo "VELOX_BROWSER=$HOME/.browsers/chrome-headless-shell-linux64/chrome-headless-shell" >> "$GITHUB_ENV"
 
-      - name: Test before publishing
+      - name: Test
         run: npm test
 
-      - name: Verify the tag matches package.json
+      - name: Tag matches package.json
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG=$(node -p "require('./package.json').version")
-          [ "$TAG" = "$PKG" ] || { echo "tag $TAG != package.json $PKG"; exit 1; }
+          [ "$TAG" = "$PKG" ] || { echo "::error::tag $TAG != package.json $PKG"; exit 1; }
+
+      - name: Should we publish?
+        id: check
+        run: |
+          V=$(node -p "require('./package.json').version")
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::NPM_TOKEN is not set — skipping npm publish (add the secret to enable it)"
+          elif npm view "velox-automation@$V" version >/dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::velox-automation@$V is already on npm — skipping publish"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Publish to npm (with provenance)
+        if: steps.check.outputs.publish == 'true'
         run: npm publish --provenance --access public
+
+      - name: Create GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "velox-automation $GITHUB_REF_NAME" --generate-notes
+          fi
