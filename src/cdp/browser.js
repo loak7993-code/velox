@@ -57,8 +57,11 @@ export class Browser extends Emitter {
       this._deferredPages = [];
       this._sweeper = setInterval(() => {
         if (!this._deferredPages.length) return;
-        for (const [page, opts] of this._deferredPages.splice(0, this._deferredPages.length)) {
+        for (const [page, opts, targetId] of this._deferredPages.splice(0, this._deferredPages.length)) {
           if (page._initialized || page._claiming || page.isClosed) continue;
+          // a target we are mid-createTarget/attach for belongs to newPage(): never
+          // initialise it with defaults, or the caller's options would be shadowed
+          if (this._pendingAttaches.has(targetId)) { this._deferredPages.push([page, opts, targetId]); continue; }
           page._init(opts).catch(() => {});
         }
       }, 25);
@@ -110,7 +113,7 @@ export class Browser extends Emitter {
       page.once('close', () => { this._pages.delete(page); this._knownTargets.delete(targetInfo.targetId); });
       // Queue for the sweeper: if newPage() claims this target within the window it
       // initialises the page with the CALLER's options and this entry is skipped.
-      this._deferredPages.push([page, ctx ? ctx.pageDefaults() : {}]);
+      this._deferredPages.push([page, ctx ? ctx.pageDefaults() : {}, targetInfo.targetId]);
     });
   }
 
@@ -148,7 +151,11 @@ export class Browser extends Emitter {
     const raced = this._knownTargets.get(targetId);
     if (raced) {
       raced._claiming = true;            // synchronous: the sweeper will stand down
-      try { await raced._init(opts); } finally { raced._claiming = false; }
+      try {
+        // force when it was already initialised (e.g. by the sweeper with defaults) so
+        // the caller's stealth/blockUrls/bandwidth/capture options are never dropped
+        await raced._init(opts, { force: !!raced._initialized });
+      } finally { raced._claiming = false; }
       return raced;
     }
     this._pendingAttaches.add(targetId);
