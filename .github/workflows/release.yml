@@ -53,10 +53,6 @@ jobs:
             echo "publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Publish to npm (with provenance)
-        if: steps.check.outputs.publish == 'true'
-        run: npm publish --provenance --access public
-
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,4 +61,30 @@ jobs:
             echo "release $GITHUB_REF_NAME already exists"
           else
             gh release create "$GITHUB_REF_NAME" --title "velox-automation $GITHUB_REF_NAME" --generate-notes
+          fi
+
+      - name: Preflight the npm token
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          who=$(npm whoami 2>/dev/null || echo "")
+          echo "publishing as: ${who:-<token rejected>}"
+          if [ -z "$who" ]; then
+            echo "::warning::NPM_TOKEN was rejected — check it is valid and (for granular tokens) scoped to ${PACKAGE_NAME:-velox-automation}"
+          fi
+
+      - name: Publish to npm (with provenance)
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          if ! npm publish --provenance --access public; then
+            cat <<'MSG'
+          ::error::npm publish failed. The usual causes:
+            • NPM_TOKEN is a granular token WITHOUT this package selected — edit it at
+              npmjs.com → Access Tokens and tick "velox-automation" (or "All packages"),
+              plus Read and write, plus "Bypass two-factor authentication".
+            • The version already exists (npm never allows republishing a version).
+            • The token expired or was revoked (they are shown only once at creation).
+          Publishing from a workstation with the same token still works, so CI can be
+          fixed without changing the released artifact.
+          MSG
+            exit 1
           fi
