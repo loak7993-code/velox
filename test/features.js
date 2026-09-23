@@ -4,6 +4,10 @@ import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
 import { startHttpProxy } from './site/proxy.js';
 import { writeFileSync, rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
 
 const EXE = process.env.VELOX_BROWSER;
 const results = [];
@@ -211,7 +215,7 @@ await soft('VELOX_CONFIG file is honoured', async () => {
   writeFileSync(cfgPath, JSON.stringify({ engine: 'lite', timeout: 4321 }));
   const { spawnSync } = await import('node:child_process');
   const probe = '/tmp/velox-config-probe.mjs';
-  writeFileSync(probe, `import { getConfig } from '/tmp/opencode/velox/src/index.js';
+  writeFileSync(probe, `import { getConfig } from ${JSON.stringify(ROOT + 'src/index.js')};
 const c = getConfig();
 process.stdout.write(JSON.stringify({ engine: c.engine, timeout: c.timeout }));`);
   const out = spawnSync(process.execPath, [probe], { env: { ...process.env, VELOX_CONFIG: cfgPath }, encoding: 'utf8' });
@@ -223,7 +227,7 @@ process.stdout.write(JSON.stringify({ engine: c.engine, timeout: c.timeout }));`
 });
 
 await soft('velox.version matches package.json', async () => {
-  const pkg = (await import('node:fs')).readFileSync('/tmp/opencode/velox/package.json', 'utf8');
+  const pkg = (await import('node:fs')).readFileSync(ROOT + 'package.json', 'utf8');
   return velox.version === JSON.parse(pkg).version;
 });
 

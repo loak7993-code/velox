@@ -2,6 +2,10 @@
 import velox from '../src/index.js';
 import { expect } from '../src/assert.js';
 import { startSite } from './site/serve.js';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
 
 const EXE = process.env.VLOX_EXE || process.env.VELOX_BROWSER;
 const results = [];
@@ -300,7 +304,7 @@ await soft('download object + saveAs', async () => {
   const dlP = p.waitForEvent('download', { timeout: 10000, predicate: (d) => d.suggestedFilename });
   await p.eval(`var a=document.createElement('a');a.href='${S}/download.bin';a.download='payload.bin';document.body.appendChild(a);a.click();undefined`);
   const dl = await dlP;
-  const saved = await dl.saveAs('/tmp/opencode/velox/out/dl-payload.bin');
+  const saved = await dl.saveAs(ROOT + 'out/dl-payload.bin');
   const { statSync } = await import('node:fs');
   const size = statSync(saved).size;
   check('download saved size', size === 2048, String(size));
@@ -327,7 +331,7 @@ await soft('clock fastForward', async () => {
 await soft('video recording (gif)', async () => {
   const pp = await b.newPage();
   await pp.goto(`${S}/`, { waitUntil: 'interactive' });
-  await pp.video.start({ path: '/tmp/opencode/velox/out/video.gif', width: 480 });
+  await pp.video.start({ path: ROOT + 'out/video.gif', width: 480 });
   await pp.eval('document.body.innerHTML += "<div style=height:900px;background:#369>x</div><div id=vt>done</div>"');
   await pp.scrollBy(0, 400);
   await pp.wait(400);
@@ -355,10 +359,10 @@ await soft('tracing', async () => {
   const ctx = b.defaultContext();
   await ctx.startTracing({ screenshots: true });
   await p.goto(`${S}/page2.html`, { waitUntil: 'interactive' });
-  const trace = await ctx.stopTracing('/tmp/opencode/velox/out/trace.json');
+  const trace = await ctx.stopTracing(ROOT + 'out/trace.json');
   check('trace events', trace.traceEvents.length > 10, String(trace.traceEvents.length));
   const { readFileSync } = await import('node:fs');
-  check('trace file', readFileSync('/tmp/opencode/velox/out/trace.json').length > 1000);
+  check('trace file', readFileSync(ROOT + 'out/trace.json').length > 1000);
   return true;
 });
 
@@ -378,7 +382,7 @@ await soft('expect(locator) assertions', async () => {
 
 /* ---------------- persistent context ---------------- */
 await soft('launchPersistentContext', async () => {
-  const dir = '/tmp/opencode/velox/out/profile';
+  const dir = ROOT + 'out/profile';
   const ctx = await velox.launchPersistentContext(dir, { executablePath: EXE, headless: true });
   const pp = await ctx.newPage();
   await pp.goto(`${S}/setcookie`);

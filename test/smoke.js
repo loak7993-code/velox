@@ -1,8 +1,12 @@
 // velox :: smoke test — exercises the full CDP stack against the local test site
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 
-const EXE = process.env.VLOX_EXE || process.env.VELOX_BROWSER || '/tmp/opencode/velox/.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
+const EXE = process.env.VLOX_EXE || process.env.VELOX_BROWSER || ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 const results = [];
 const check = (name, cond, extra = '') => {
   results.push([name, !!cond, extra]);
@@ -69,9 +73,9 @@ check('api body fetch', apiReq && (await page.body(apiReq)) === '{"hello":"world
 check('api rendered in page', (await page.text('#api-target')) === 'api:world');
 
 // 10. screenshot + pdf
-const shot = await page.screenshot({ path: '/tmp/opencode/velox/out/shot.png', full: true });
+const shot = await page.screenshot({ path: ROOT + 'out/shot.png', full: true });
 check('screenshot', shot.length > 5000, `${shot.length} bytes`);
-const pdf = await page.pdf({ path: '/tmp/opencode/velox/out/shot.pdf' });
+const pdf = await page.pdf({ path: ROOT + 'out/shot.pdf' });
 check('pdf', pdf.length > 1000, `${pdf.length} bytes`);
 
 // 11. route mocking
@@ -98,7 +102,7 @@ await page.setCookies([{ name: 'flavor', value: 'mint', url: SITE }]);
 check('cookies', (await page.cookies()).some((c) => c.name === 'flavor' && c.value === 'mint'));
 
 // 15. session save/load
-const sess = await page.saveSession('/tmp/opencode/velox/out/session.json');
+const sess = await page.saveSession(ROOT + 'out/session.json');
 check('saveSession', sess.cookies.length > 0);
 
 // 16. localStorage

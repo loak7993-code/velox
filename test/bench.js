@@ -2,8 +2,12 @@
 // node test/bench.js [iterations]
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 
-const EXE = process.env.VLOX_EXE || '/tmp/opencode/velox/.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
+const EXE = process.env.VLOX_EXE || ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
 const { chromium } = await import('playwright-core').catch(() => ({ chromium: null }));
 
 const site = await startSite();

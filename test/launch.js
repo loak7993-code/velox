@@ -1,6 +1,10 @@
 // velox :: launch.js — launch behaviour: browser resolution + sandbox self-healing
 import { writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
 
 const results = [];
 const check = (name, cond, extra = '') => {

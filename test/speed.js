@@ -1,6 +1,10 @@
 // velox :: speed.js — micro-benchmarks for the v2.1 speed work
 import velox from '../src/index.js';
 import { startSite } from './site/serve.js';
+import { fileURLToPath } from 'node:url';
+const ROOT = fileURLToPath(new URL('..', import.meta.url)).replace(/\/?$/, '/');
+const DEFAULT_EXE = ROOT + '.browsers/chrome-headless-shell-linux64/chrome-headless-shell';
+
 
 const EXE = process.env.VELOX_BROWSER;
 const site = await startSite();
