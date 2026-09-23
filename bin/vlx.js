@@ -26,6 +26,8 @@ function parse(args) {
     } else if (a === '-o' || a === '--out') out.out = args[++i];
     else if (a === '--sel' || a === '--wait' || a === '--recipe' || a === '--engine' || a === '--browser' || a === '--device' || a === '--ua' || a === '--proxy' || a === '--timeout' || a === '--viewport' || a === '--format' || a === '--load-session') out[a.slice(2)] = args[++i];
     else if (a === '--header') { const [k, v] = (args[++i] || '').split(/:(.*)/); out.headers[(k || '').trim()] = (v || '').trim(); }
+    else if (a === '--proxy-auth') { const [u, p] = (args[++i] || '').split(':'); out.proxyAuth = { username: u, password: p || '' }; }
+    else if (a === '--retries' || a === '--config') out[a.slice(2)] = args[++i];
     else if (a === '--cookie') out.cookies.push(args[++i]);
     else if (a.startsWith('-')) { /* ignore */ }
     else out._.push(a);
@@ -33,6 +35,8 @@ function parse(args) {
   return out;
 }
 
+const flags0 = parse(rest);
+if (flags0.config) process.env.VELOX_CONFIG = flags0.config;
 const die = (msg) => { console.error(msg); process.exit(1); };
 const engines = new Set(['auto', 'lite', 'cdp']);
 
@@ -44,7 +48,8 @@ async function openOpts(flags) {
     stealth: flags.stealth, ads: flags.ads,
     headless: flags.headless !== false,
     ua: flags.ua, device: flags.device, locale: flags.locale, timezone: flags.tz,
-    proxy: flags.proxy ? { server: flags.proxy } : undefined,
+    proxy: flags.proxy ? { server: flags.proxy, ...(flags.proxyAuth || {}) } : undefined,
+    retries: flags.retries ? +flags.retries : undefined,
     headers: Object.keys(flags.headers).length ? flags.headers : undefined,
     timeout: flags.timeout ? +flags.timeout : undefined,
   };
@@ -65,6 +70,7 @@ Commands:
   eval   <url> <expr>          evaluate JS in the page and print the result
   cookies <url>                print cookies seen while loading the page
   bench  <url>                 time lite vs browser on the same URL
+  check-proxy <proxy>          verify a proxy: status, latency, exit IP (--url, --ip, --json)
   save-session <url> <file>    capture cookies + web storage to a JSON file
   load-session <url> <file>    open URL with a saved session restored first
 
@@ -76,7 +82,10 @@ Options:
   --ads                        block known ad/tracker domains
   --device <name>              emulate device (iphone_15, pixel_8, ipad, desktop...)
   --ua, --locale, --tz         overrides
-  --proxy <server>             proxy server (socks5:// or http://)
+  --proxy <server>             proxy server (http://, https://, socks5://; creds inline or --proxy-auth)
+  --proxy-auth user:pass       proxy credentials (alternative to inline creds)
+  --retries <n>                retry transient failures n times
+  --config <file>              load defaults from a JSON config file
   --header "K: V"              extra request header (repeatable)
   --cookie "a=b"               set cookie (repeatable)
   --viewport WxH               browser viewport (default 1280x720)
@@ -207,6 +216,17 @@ switch (cmd) {
     console.log(`status ${nav.status}  title: ${await p.title()}`);
     await b.close();
     break;
+  }
+
+  case 'check-proxy': case 'proxy-check': {
+    const flags = parse(rest);
+    const url = flags._[0] || die('usage: vlx check-proxy <proxy-url-or-host:port> [--url <target>] [--json]');
+    const { checkProxy } = await import('../src/proxy.js');
+    const target = flags.url || 'https://example.com';
+    const r = await checkProxy(url, { url: target, ipUrl: flags.ip || undefined, timeout: flags.timeout ? +flags.timeout : 20000 });
+    if (flags.json) console.log(JSON.stringify(r, null, 2));
+    else console.log(`${r.ok ? '✓ alive' : '✗ dead'}  ${r.proxy}\n  status ${r.status}  ${r.ms}ms${r.ip ? `  exit ip ${r.ip}` : ''}${r.error ? `\n  ${r.error}` : ''}`);
+    process.exit(r.ok ? 0 : 1);
   }
 
   case 'bench': {

@@ -4,6 +4,7 @@ import http from 'node:http';
 import https from 'node:https';
 import zlib from 'node:zlib';
 import { parse, decodeEntities } from './html.js';
+import { agentsFor } from './proxy-agent.js';
 
 const agents = {
   http: new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16 }),
@@ -65,6 +66,9 @@ export async function fetch(url, opts = {}) {
   const maxRedirects = opts.maxRedirects ?? 10;
   const headers = { ...DEFAULT_HEADERS, ...(opts.headers || {}) };
   if (headers['accept-encoding'] === undefined) delete headers['accept-encoding'];
+  // route through a proxy when asked — same client, no browser needed
+  const proxied = opts.proxy ? agentsFor(opts.proxy, { timeout: opts.timeout || 30000 }) : null;
+  if (proxied?.authHeader) headers['proxy-authorization'] = proxied.authHeader;
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const cookie = jar.headerFor(current);
@@ -75,7 +79,12 @@ export async function fetch(url, opts = {}) {
     const res = await new Promise((resolve, reject) => {
       const req = mod.request(u, {
         method: opts.method || 'GET',
-        agent: agents[u.protocol === 'https:' ? 'https' : 'http'],
+        agent: proxied
+          ? proxied[u.protocol === 'https:' ? 'https' : 'http']
+          : agents[u.protocol === 'https:' ? 'https' : 'http'],
+        // absolute-form request line is what an HTTP proxy expects; a SOCKS tunnel
+        // already knows the host, so it takes the normal origin-form path
+        ...(proxied && u.protocol === 'http:' && !proxied.proxy.scheme.startsWith('socks') ? { path: u.href } : {}),
         headers: { ...headers, ...(cookie ? { cookie } : {}), ...(opts.body ? { 'content-length': Buffer.byteLength(opts.body) } : {}) },
         ...(opts.timeout ? { timeout: opts.timeout } : {}),
         ...(opts.rejectUnauthorized === false && u.protocol === 'https:' ? { rejectUnauthorized: false } : {}),
@@ -103,6 +112,9 @@ export async function fetch(url, opts = {}) {
     try { body = decompress(raw); } catch { body = raw; }
     const ms = Number((process.hrtime.bigint() - t0) / 1000000n);
 
+    if (res.statusCode === 407 && !(headers['proxy-authorization'])) {
+      throw new Error('proxy authentication required (HTTP 407) — pass credentials, e.g. http://user:pass@host:port');
+    }
     if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
       current = new URL(res.headers.location, current).href;
       if (res.statusCode === 303) { opts.method = 'GET'; delete opts.body; }
@@ -128,7 +140,6 @@ export class LiteResponse {
 }
 
 /* ----------------------------------------- JS-need detection ----------------------------------------- */
-
 const SPA_ROOT = /<div[^>]+id=["']?(root|app|__next|__nuxt|q-app|svelte|elm|vue-app)["']?[^>]*>\s*(<\/div>|<!--.*?-->)/i;
 const SSR_STATE = /__NEXT_DATA__|__NUXT__|__INITIAL_STATE__|__APOLLO_STATE__|window\.__PRELOADED|application\/ld\+json/;
 
@@ -155,4 +166,30 @@ function stripTags(html) {
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
       .replace(/<[^>]+>/g, ' ')
   ).replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Fetch many URLs in parallel over the shared keep-alive pool — no browser.
+ * `concurrency` caps in-flight requests; failures are captured per-URL instead
+ * of rejecting the whole batch (set `throwOnError` to change that).
+ */
+export async function fetchAll(urls, opts = {}) {
+  const { concurrency = 8, throwOnError = false, ...fetchOpts } = opts;
+  const list = [...urls];
+  const out = new Array(list.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, list.length)) }, async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= list.length) return;
+      try {
+        out[i] = await fetch(typeof list[i] === 'string' ? list[i] : list[i].url, { ...fetchOpts, ...(typeof list[i] === 'object' ? list[i] : {}) });
+      } catch (e) {
+        if (throwOnError) throw e;
+        out[i] = { error: e, url: typeof list[i] === 'string' ? list[i] : list[i].url, status: 0, text: () => '', json: () => { throw e; } };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return out;
 }

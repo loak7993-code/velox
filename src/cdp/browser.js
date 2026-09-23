@@ -7,6 +7,8 @@ import { CdpConnection } from './connection.js';
 import { findBrowser, discoverBrowsers } from './discovery.js';
 import { VeloxPage } from './page.js';
 import { BrowserContext } from './context.js';
+import { proxyFlags, normalizeProxy } from '../proxy.js';
+import { getConfig, applyLaunchOptions, runHook, hasHook } from '../plugins.js';
 import { Emitter } from '../util.js';
 
 const HEADLESS_OK = (p) => !/headless-shell/i.test(p);
@@ -35,8 +37,7 @@ export class Browser extends Emitter {
         autoAttach: true, waitForDebuggerOnStart: true, flatten: true,
       });
     } catch {}
-    this._contexts = new Map(); // browserContextId -> BrowserContext
-    this._defaultContext = null;
+    if (!this._contexts) this._contexts = new Map(); // browserContextId -> BrowserContext
 
     this.conn.on('Target.attachedToTarget', async ({ sessionId, targetInfo, waitingForDebugger }) => {
       if (waitingForDebugger) this.conn.fire('Runtime.runIfWaitingForDebugger', {}, { sessionId });
@@ -96,9 +97,11 @@ export class Browser extends Emitter {
 
   /** Isolated context: separate cookies/storage/world. */
   async newContext(opts = {}) {
+    const px = opts.proxy ? normalizeProxy(opts.proxy) : null;
     const { browserContextId } = await this.conn.send('Target.createBrowserContext', {
       disposeOnDetach: true,
-      ...(opts.proxy ? { proxyServer: opts.proxy.server } : {}),
+      ...(px ? { proxyServer: px.server } : {}),
+      ...(px?.bypass ? { proxyBypassList: [].concat(px.bypass).join(',') } : {}),
     });
     const ctx = new BrowserContext(this, browserContextId, opts);
     this._contexts.set(browserContextId, ctx);
@@ -151,16 +154,29 @@ export class Browser extends Emitter {
 
   /** Launch a local browser. Uses any installed Chromium-family binary. */
   static async launch(opts = {}) {
+    const cfg = getConfig();
+    opts = applyLaunchOptions({
+      ...(cfg.headless !== undefined ? { headless: cfg.headless } : {}),
+      ...(cfg.transport ? { transport: cfg.transport } : {}),
+      ...(cfg.proxy ? { proxy: cfg.proxy } : {}),
+      ...(cfg.noSandbox !== undefined ? { noSandbox: cfg.noSandbox } : {}),
+      ...opts,
+    });
+    let browser;
     try {
-      return await Browser._launchOnce(opts);
+      browser = await Browser._launchOnce(opts);
     } catch (e) {
       // Ubuntu 23.10+/containers/WSL restrict the unprivileged sandbox. If Chrome
       // says it can't sandbox, relaunch with --no-sandbox instead of failing.
       if (!opts.noSandbox && /usable sandbox|zygote_host|new namespace|sandbox/i.test(e.message)) {
-        return Browser._launchOnce({ ...opts, noSandbox: true });
+        browser = await Browser._launchOnce({ ...opts, noSandbox: true });
+      } else {
+        runHook('onError', e, { phase: 'launch' });
+        throw e;
       }
-      throw e;
     }
+    runHook('onBrowser', browser);
+    return browser;
   }
 
   static async _launchOnce(opts = {}) {
@@ -191,7 +207,7 @@ export class Browser extends Emitter {
       '--metrics-recording-interval=2147483647', '--no-service-autorun',
       ...(HEADLESS_OK(exe) && headless ? ['--headless=new'] : []),
       ...(opts.windowSize ? [`--window-size=${opts.windowSize[0]},${opts.windowSize[1]}`] : []),
-      ...(proxy ? [`--proxy-server=${proxy.server}`] : []),
+      ...(proxy ? proxyFlags(proxy) : []),
       ...args,
     ];
 
@@ -225,7 +241,8 @@ export class Browser extends Emitter {
     }
     const b = new Browser(conn, proc, { ...opts, _userDataDir: userDataDir ? null : dir });
     try { b.versionInfo = await conn.send('Browser.getVersion'); } catch {}
-    if (proxy?.username) await b._proxyAuth(proxy);
+    // proxy credentials live on the browser so every page can answer 407 challenges
+    if (proxy) b.proxy = normalizeProxy(proxy);
     if (stealth || defaultContext) { /* handled per-page */ }
     proc.once('exit', () => { b._closed = true; b.emit('disconnect'); });
     return b;
@@ -242,17 +259,20 @@ export class Browser extends Emitter {
     const conn = await CdpConnection.connect(wsUrl);
     const b = new Browser(conn, null, opts);
     try { b.versionInfo = await conn.send('Browser.getVersion'); } catch {}
-    return b;
-  }
-
-  async _proxyAuth({ username, password }) {
-    // Fetch.authRequired is browser-level on the root session
-    await this.conn.send('Fetch.enable', { handleAuthRequests: true }).catch(() => {});
-    this.conn.on('Fetch.authRequired', ({ requestId }) => {
-      this.conn.fire('Fetch.continueWithAuth', {
-        requestId, authChallengeResponse: { response: 'ProvideCredentials', username, password },
+    if (opts.proxy) b.proxy = normalizeProxy(opts.proxy);
+    // remote browsers drop connections; keep the session alive by default
+    b._autoReconnect = opts.autoReconnect !== false;
+    if (b._autoReconnect) {
+      conn.on('disconnect', () => {
+        if (b._reconnecting || b._closingRemote) return;
+        b._reconnecting = true;
+        b.reconnect({ attempts: opts.reconnectAttempts ?? 5, delay: opts.reconnectDelay ?? 400 })
+          .catch(() => {})
+          .finally(() => { b._reconnecting = false; });
       });
-    });
+    }
+    runHook('onBrowser', b);
+    return b;
   }
 
   /** New page in the default context. Everything optional: { stealth, ads, device, viewport, ua, locale, timezone, geolocation, headers, blockUrls, routes } */
@@ -267,11 +287,62 @@ export class Browser extends Emitter {
 
   pages() { return [...this._pages].filter((p) => !p.isClosed); }
 
+  /** Cheap liveness probe. */
+  async healthy({ timeout = 5000 } = {}) {
+    if (this.closed) return false;
+    try { await this.conn.send('Browser.getVersion', {}, { timeout }); return true; }
+    catch { return false; }
+  }
+
+  /**
+   * Re-establish a dropped connection (remote/connected browsers) and re-attach to
+   * every page we already manage, so existing objects keep working.
+   */
+  async reconnect({ attempts = 3, delay = 500 } = {}) {
+    if (this.conn.transport === 'pipe') {
+      throw new Error('reconnect() needs a socket connection — a launched browser owns its pipe; use velox.connect()/a remote endpoint');
+    }
+    const url = this.conn.wsUrl;
+    let lastErr;
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        const conn = await CdpConnection.connect(url, { timeout: 10000 });
+        this.conn = conn;
+        this._closed = false;
+        await this._setupAutoAttach();
+        for (const [targetId, page] of this._knownTargets) {
+          try {
+            const { sessionId } = await conn.send('Target.attachToTarget', { targetId, flatten: true });
+            page.conn = conn;
+            page.session = conn.session(sessionId);
+            page._wired = false;                  // rewire event handlers onto the new session
+            page._initScriptSources = new Set();   // init scripts are per-session in CDP
+            page._fetchOn = false; page._fetchReady = null;
+            page._closed = false;
+            await page._init(page._opts || {});
+            if (page._routes?.length) {
+              page._fetchOn = true;
+              await page.session.send('Fetch.enable', { patterns: [{ urlPattern: '*' }], ...(page._httpCredentials || page._proxyCredentials ? { handleAuthRequests: true } : {}) }).catch(() => {});
+            }
+          } catch { /* target disappeared while we were away */ }
+        }
+        this.emit('reconnected', { attempt: i });
+        return this;
+      } catch (e) {
+        lastErr = e;
+        if (i < attempts) await new Promise((r) => setTimeout(r, delay * i));
+      }
+    }
+    this.emit('reconnectFailed', lastErr);
+    throw lastErr;
+  }
+
   async contexts() { return (await this.conn.send('Target.getBrowserContexts')).browserContextIds; }
 
   async close() {
     if (this._closed) return;
     this._closed = true;
+    this._closingRemote = true;   // a deliberate close must not trigger auto-reconnect
     try { await Promise.race([this.conn.send('Browser.close'), new Promise((r) => setTimeout(r, 3000))]); } catch {}
     this.conn.close();
     // give the process a moment to exit gracefully (profile/cookie flush) before SIGKILL

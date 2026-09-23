@@ -2,28 +2,54 @@
 // transparently escalate to a real browser the moment a page needs one.
 import { fetch as liteFetch, CookieJar, needsJS } from './lite/engine.js';
 import { Browser } from './cdp/browser.js';
-import { normHeaders } from './util.js';
+import { normHeaders, sleep } from './util.js';
+import { getConfig, applyPageOptions } from './plugins.js';
 
 /** Open a URL. engine: 'auto' (default) | 'lite' (never escalate) | 'cdp' (always browser). */
 export async function open(url, opts = {}) {
-  const engine = opts.engine || 'auto';
+  const cfg = getConfig();
+  opts = applyPageOptions({ capture: cfg.capture, headers: cfg.headers, userAgent: cfg.userAgent, baseURL: cfg.baseURL, storageState: cfg.storageState, ...opts });
+  const engine = opts.engine || cfg.engine || 'auto';
+  const tries = Math.max(1, (opts.retries ?? cfg.retries ?? 0) + 1);
+  const retryDelay = opts.retryDelay ?? cfg.retryDelay ?? 300;
+
+  /** Retry transient failures (network hiccups, timeouts) up to `tries` times. */
+  const withRetry = async (fn) => {
+    let lastErr;
+    for (let i = 1; i <= tries; i++) {
+      try { return await fn(); }
+      catch (e) {
+        lastErr = e;
+        if (i === tries || !/timeout|ERR_|ECONN|socket|closed|Target closed|Navigation/i.test(e.message || '')) throw e;
+        await sleep(retryDelay * i);
+      }
+    }
+    throw lastErr;
+  };
+
   if (engine === 'cdp') {
-    const page = await _browserPage(url, opts);
-    const s = new BrowserSession(page, opts);
-    await s.goto(url);
-    return s;
+    return withRetry(async () => {
+      const page = await _browserPage(url, opts);
+      const s = new BrowserSession(page, opts);
+      await s.goto(url);
+      return s;
+    });
   }
+
   const jar = opts.jar || new CookieJar();
-  const res = await liteFetch(url, {
-    jar, headers: opts.headers, timeout: opts.timeout || 20000, method: opts.method, body: opts.body,
+  const res = await withRetry(() => liteFetch(url, {
+    jar, headers: opts.headers, timeout: opts.timeout || cfg.navTimeout, method: opts.method, body: opts.body,
     maxRedirects: opts.maxRedirects,
-  });
+  }));
+
   if (engine === 'auto' && needsJS(res)) {
-    const page = await _browserPage(url, opts, jar);
-    const s = new BrowserSession(page, opts);
-    await page.goto(url, { waitUntil: opts.waitUntil || 'interactive', timeout: opts.timeout || 30000 });
-    s._startedLite = true;
-    return s;
+    return withRetry(async () => {
+      const page = await _browserPage(url, opts, jar);
+      const s = new BrowserSession(page, opts);
+      await page.goto(url, { waitUntil: opts.waitUntil || 'interactive', timeout: opts.timeout || cfg.navTimeout });
+      s._startedLite = true;
+      return s;
+    });
   }
   return new LiteSession(res, opts);
 }

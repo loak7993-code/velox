@@ -1,5 +1,33 @@
 // velox — type definitions
 declare module 'velox' {
+  export interface ProxyOptions {
+    server: string;                 // 'http://host:port' | 'socks5://host:port' | 'host:port'
+    username?: string;
+    password?: string;
+    bypass?: string | string[];     // e.g. ['<-loopback>'] to force loopback through the proxy
+  }
+
+  export interface PluginHooks {
+    name?: string;
+    setup?(api: any): void;
+    launchOptions?(opts: LaunchOptions): LaunchOptions;
+    pageOptions?(opts: PageOptions): PageOptions;
+    contextOptions?(opts: ContextOptions): ContextOptions;
+    onBrowser?(browser: Browser): void;
+    onPage?(page: VeloxPage): void;
+    onRequest?(req: RouteRequest): void;
+    onResponse?(entry: RequestEntry): void;
+    onError?(err: Error, context?: any): void;
+  }
+
+  export interface VeloxConfig {
+    timeout?: number; navTimeout?: number; engine?: 'auto' | 'lite' | 'cdp';
+    retries?: number; retryDelay?: number; headless?: boolean;
+    stealth?: boolean; ads?: boolean; capture?: boolean;
+    transport?: 'pipe' | 'socket'; proxy?: string | ProxyOptions; noSandbox?: boolean;
+    baseURL?: string; storageState?: string | object; headers?: Record<string, string>; userAgent?: string;
+  }
+
   export interface VeloxFetchOptions {
     headers?: Record<string, string>;
     timeout?: number;
@@ -118,6 +146,9 @@ declare module 'velox' {
   export interface PdfOptions { path?: string; format?: string | [number, number]; landscape?: boolean; printBackground?: boolean; margin?: { top?: number; right?: number; bottom?: number; left?: number }; scale?: number; headerTemplate?: string; footerTemplate?: string; preferCSSPageSize?: boolean; }
 
   export interface PageOptions {
+    capture?: boolean;              // false = skip the Network domain (faster, no request log)
+    proxy?: ProxyOptions;
+    retries?: number; retryDelay?: number;
     stealth?: boolean;
     ads?: boolean;
     blockUrls?: string[];
@@ -141,6 +172,8 @@ declare module 'velox' {
 
   export interface LaunchOptions {
     browser?: string;
+    transport?: 'pipe' | 'socket';
+    noSandbox?: boolean;
     executablePath?: string;
     headless?: boolean;
     args?: string[];
@@ -239,6 +272,15 @@ declare module 'velox' {
     waitForLoad(state?: string, timeout?: number): Promise<boolean>;
     waitForUrl(match: string | RegExp, timeout?: number): Promise<string>;
     waitForFunction(js: string, opts?: { timeout?: number }): Promise<any>;
+    /** Run several actions over one pipelined flush — [method, ...args] or a function. */
+    batch(actions: any[], opts?: { concurrency?: number }): Promise<any[]>;
+    /** Pre-parse selectors in the page. */
+    warm(selectors: string | string[]): Promise<number>;
+    /** Register a custom in-page selector engine, used as `name=value`. */
+    addSelectorEngine(name: string, fn: ((value: string, root: any) => any[]) | string): Promise<any>;
+    setDefaultTimeout(ms: number): VeloxPage;
+    healthy(opts?: { timeout?: number }): Promise<boolean>;
+    reconnect(opts?: { attempts?: number; delay?: number }): Promise<Browser>;
     count(sel: string): Promise<number>;
     attr(sel: string, name: string): Promise<string | null>;
     val(sel: string): Promise<string | null>;
@@ -303,8 +345,32 @@ declare module 'velox' {
     close(): Promise<void>;
     on(event: string, handler: (...args: any[]) => void): () => void;
     waitForEvent(event: string, opts?: { predicate?: (p: any) => boolean; timeout?: number }): Promise<any>;
+    healthy(opts?: { timeout?: number }): Promise<boolean>;
+    reconnect(opts?: { attempts?: number; delay?: number }): Promise<Browser>;
+    proxy?: ProxyOptions;
     versionInfo?: any;
     closed: boolean;
+  }
+
+  export class ProxyPool {
+    constructor(proxies: (string | ProxyOptions)[], opts?: {
+      strategy?: 'round-robin' | 'random' | 'least-used' | 'least-latency';
+      maxFailures?: number; cooldownMs?: number;
+      healthCheckUrl?: string; healthCheckTimeout?: number;
+    });
+    readonly size: number;
+    available(): ProxyEntry[];
+    next(): ProxyEntry;
+    sticky(key: string): ProxyEntry;
+    release(proxy: ProxyEntry | string, outcome?: { ok?: boolean; latency?: number }): void;
+    withProxy<T>(fn: (proxy: ProxyEntry) => Promise<T>, opts?: { attempts?: number }): Promise<T>;
+    healthCheck(o?: { url?: string; ipUrl?: string; timeout?: number }): Promise<any[]>;
+    stats(): { id: string; server: string; uses: number; failures: number; latency: number | null; ejected: boolean }[];
+  }
+  export interface ProxyEntry extends ProxyOptions {
+    id: string; scheme: string; host: string; port: number; url: string;
+    latency: number | null; uses: number; failures: number; ejectedUntil: number;
+    toProxy(): ProxyOptions;
   }
 
   export interface ContextOptions extends PageOptions {
@@ -434,6 +500,15 @@ declare module 'velox' {
     needsJS(res: LiteResponse): boolean;
     CookieJar: typeof CookieJar;
     expect(target: any, opts?: any): any;
+    fetchAll(urls: (string | any)[], opts?: VeloxFetchOptions & { concurrency?: number }): Promise<LiteResponse[]>;
+    ProxyPool: typeof ProxyPool;
+    checkProxy(proxy: string | ProxyOptions, o?: { url?: string; ipUrl?: string; timeout?: number }): Promise<any>;
+    normalizeProxy(proxy: string | ProxyOptions): ProxyOptions;
+    config(patch?: VeloxConfig): VeloxConfig;
+    getConfig(): VeloxConfig;
+    use(plugin: PluginHooks | (() => PluginHooks)): PluginHooks;
+    plugins: Record<string, any>;
+    registerDevice(name: string, def: Device): Device;
     Browser: any;
     BrowserContext: any;
     VeloxPage: any;

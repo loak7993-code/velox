@@ -13,6 +13,7 @@ import { videoApi } from './screencast.js';
 import { Coverage } from './coverage.js';
 import { Accessibility } from './accessibility.js';
 import { Clock, CLOCK_SOURCE } from './clock.js';
+import { getConfig, applyPageOptions, runHook, hasHook, registeredDevices } from '../plugins.js';
 
 const KEYMAP = {
   enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
@@ -84,11 +85,20 @@ export class VeloxPage extends Emitter {
   }
 
   get isClosed() { return this._closed; }
+
+  /** Per-action default timeout (page → context → global config). */
+  setDefaultTimeout(ms) { this._defaultTimeout = ms; return this; }
+  _to(opts = {}) {
+    const cfg = getConfig();
+    return { timeout: this._defaultTimeout ?? this.context?._defaultTimeout ?? cfg.timeout, ...opts };
+  }
   get targetId() { return this.targetInfo.targetId; }
 
   /* ------------------------------------------------ setup ----------------------------------------------- */
 
   async _init(opts = {}) {
+    const cfg = getConfig();
+    opts = applyPageOptions({ capture: cfg.capture, ...opts });
     this._opts = opts;
     const s = this.session;
     // wire events exactly once — _init may run again when auto-attach races an
@@ -97,11 +107,14 @@ export class VeloxPage extends Emitter {
       this._wired = true;
       this._wireEvents();
     }
+    // capture:false skips the Network domain — no request tracking, no per-request
+    // event plumbing: lighter page creation and faster loads on request-heavy sites
+    this._capture = opts.capture !== false;
     // single pipelined batch — all domain enables fly at once
     const jobs = [
       s.send('Page.enable'),
       s.send('Runtime.enable'),
-      s.send('Network.enable', { maxPostDataSize: 65536 }),
+      ...(this._capture ? [s.send('Network.enable', { maxPostDataSize: 65536 })] : []),
       s.send('Page.setLifecycleEventsEnabled', { enabled: true }),
     ];
     await Promise.all(jobs).catch(() => {});
@@ -128,6 +141,10 @@ export class VeloxPage extends Emitter {
     }
     if (opts.bypassCSP) await s.send('Page.setBypassCSP', { enabled: true }).catch(() => {});
     if (opts.httpCredentials) this._httpCredentials = opts.httpCredentials;
+    // a launch-level proxy (browser.proxy) applies to every page — inherit its credentials
+    const proxyCred = (opts.proxy?.username ? opts.proxy : null)
+      || (this.browser?.proxy?.username ? this.browser.proxy : null);
+    if (proxyCred) this._proxyCredentials = { username: proxyCred.username, password: proxyCred.password };
     if (opts.baseURL) this._baseURL = opts.baseURL;
     if (opts.storageState) this._pendingStorageState = opts.storageState;
     if (opts.context?._pendingStorageState) this._pendingStorageState = opts.context._pendingStorageState;
@@ -136,8 +153,8 @@ export class VeloxPage extends Emitter {
     this._dialogCfg = { action: opts.dialogs?.action || 'accept', promptText: opts.dialogs?.promptText || '' };
     if (opts.blockUrls || opts.ads) await this.block(opts.ads ? [...defaultBlocklist(), ...(opts.blockUrls || [])] : opts.blockUrls);
     if (opts.routes) for (const [pat, h] of Object.entries(opts.routes)) this.route(pat, h);
-    if (opts.httpCredentials) {
-      // basic-auth: intercept auth challenges
+    if (opts.httpCredentials || proxyCred) {
+      // intercept auth challenges (site login and/or proxy login)
       await s.send('Fetch.enable', { handleAuthRequests: true }).catch(() => {});
       this._fetchOn = true;
     }
@@ -155,6 +172,10 @@ export class VeloxPage extends Emitter {
       this._downloads = dir;
       await this.conn.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: dir, eventsEnabled: true }).catch(() => {});
     }
+    // plugin network hooks arm interception only when a plugin actually wants them
+    if (hasHook('onRequest')) this.route('**/*', (req) => { runHook('onRequest', req); if (!req._handled) req.continue(); });
+    if (hasHook('onResponse')) this.on('response', (entry) => runHook('onResponse', entry));
+    if (!this._pluginsRan) { this._pluginsRan = true; runHook('onPage', this); }
     // unpause if this target was auto-attached with waitForDebuggerOnStart
     s.fire('Runtime.runIfWaitingForDebugger');
     return this;
@@ -186,10 +207,10 @@ export class VeloxPage extends Emitter {
       this.emit('pageerror', rec);
     });
     s.on('Page.javascriptDialogOpening', (info) => this._onDialog(info));
-    s.on('Network.requestWillBeSent', (p) => this._onRequest(p));
-    s.on('Network.responseReceived', (p) => this._onResponse(p));
-    s.on('Network.loadingFinished', ({ requestId, timestamp, encodedDataLength }) => this._onDone(requestId, timestamp, encodedDataLength));
-    s.on('Network.loadingFailed', ({ requestId, errorText, canceled, blockedReason }) => this._onDone(requestId, undefined, 0, { errorText, canceled, blockedReason }));
+    s.on('Network.requestWillBeSent', (p) => { if (this._capture) this._onRequest(p); });
+    s.on('Network.responseReceived', (p) => { if (this._capture) this._onResponse(p); });
+    s.on('Network.loadingFinished', ({ requestId, timestamp, encodedDataLength }) => { if (this._capture) this._onDone(requestId, timestamp, encodedDataLength); });
+    s.on('Network.loadingFailed', ({ requestId, errorText, canceled, blockedReason }) => { if (this._capture) this._onDone(requestId, undefined, 0, { errorText, canceled, blockedReason }); });
     s.on('Page.downloadWillBegin', ({ guid, url, suggestedFilename }) => {
       const dl = new Download(this, guid, url, suggestedFilename);
       this._dlMap = this._dlMap || new Map();
@@ -233,12 +254,15 @@ export class VeloxPage extends Emitter {
         child._init(this.context ? this.context.pageDefaults() : {}).catch(() => {});
       }
     });
-    s.on('Fetch.authRequired', (p) => {
-      // basic-auth challenge (context httpCredentials)
-      const cred = this._httpCredentials;
+    s.on('Fetch.authRequired', (challenge) => {
+      // two different challenges share this event: the proxy login and the site login
+      const isProxy = String(challenge.authChallenge?.source || '').toLowerCase() === 'proxy';
+      const cred = isProxy
+        ? (this._proxyCredentials || this.browser?.proxy || null)
+        : this._httpCredentials;
       this.session.send('Fetch.continueWithAuth', {
-        requestId: p.requestId,
-        authChallengeResponse: cred
+        requestId: challenge.requestId,
+        authChallengeResponse: cred?.username
           ? { response: 'ProvideCredentials', username: cred.username, password: cred.password }
           : { response: 'DefaultAuthCredentials' },
       }).catch(() => {});
@@ -282,7 +306,8 @@ export class VeloxPage extends Emitter {
 
   /* ---------------------------------------------- navigation --------------------------------------------- */
 
-  async goto(url, { waitUntil = 'interactive', timeout = 30000, referer } = {}) {
+  async goto(url, { waitUntil = 'interactive', timeout, referer } = {}) {
+    timeout = timeout ?? getConfig().navTimeout;
     if (this._baseURL && !/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = new URL(url, this._baseURL).href;
     else if (!/^(https?|file|data|about|blob|chrome-error):/i.test(url)) url = 'https://' + url;
     if (this._fetchReady) await this._fetchReady;   // let Fetch.enable land before navigating
@@ -313,7 +338,8 @@ export class VeloxPage extends Emitter {
     if (waitUntil === 'networkidle' || waitUntil === 'settle') {
       await this._waitForLife('DOMContentLoaded', Math.max(1, timeout - (Date.now() - t0)));
       await this._waitForLife('load', Math.max(1, timeout - (Date.now() - t0)));
-      await (waitUntil === 'settle' ? sleep(300) : this._networkIdle(Math.max(1, timeout - (Date.now() - t0))));
+      if (waitUntil === 'settle' || !this._capture) await sleep(300);
+      else await this._networkIdle(Math.max(1, timeout - (Date.now() - t0)));
     } else {
       await withTimeout(this._waitForLife(map[waitUntil] || 'DOMContentLoaded', timeout * 2), timeout, `goto ${waitUntil}`).catch((e) => { if (!(e instanceof TimeoutError)) throw e; });
     }
@@ -450,6 +476,50 @@ export class VeloxPage extends Emitter {
     if (!ok) await this.session.send('Runtime.evaluate', { expression: ENGINE_SOURCE }).catch(() => {});
   }
 
+  /* ------------------------------------------- speed: batching ------------------------------------------- */
+
+  /**
+   * Run several actions over one pipelined flush. Each entry is [method, ...args]
+   * or a function receiving the page. Independent actions then fly together instead
+   * of paying a full round-trip each.
+   *   await page.batch([['click','#a'], ['fill','#b','x'], ['text','h1']]);
+   */
+  async batch(actions, { concurrency = 0 } = {}) {
+    const run = (a) => (typeof a === 'function' ? a(this) : this[a[0]].apply(this, a.slice(1)));
+    const list = actions.map((a, i) => ({ a, i }));
+    if (!concurrency || concurrency >= list.length) return Promise.all(list.map(({ a }) => run(a)));
+    const out = new Array(actions.length);
+    let cursor = 0;
+    await Promise.all(Array.from({ length: concurrency }, async () => {
+      for (;;) {
+        const idx = cursor++;
+        if (idx >= actions.length) return;
+        out[idx] = await run(actions[idx]);
+      }
+    }));
+    return out;
+  }
+
+  /**
+   * Register a custom in-page selector engine: use it as `name=value`.
+   *   await page.addSelectorEngine('belowfold', (value, root) =>
+   *     [...root.querySelectorAll(value)].filter(el => el.getBoundingClientRect().top > 0));
+   */
+  async addSelectorEngine(name, fn) {
+    const src = typeof fn === 'function' ? fn.toString() : fn;
+    await this.session.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(function(){ var e = (window.__vlx = window.__vlx || {}); var c = e.custom = e.custom || {}; c[${JSON.stringify(name)}] = (0, eval)('(' + ${JSON.stringify(src)} + ')'); })()`,
+    }).catch(() => {});
+    return this.eval(`(function(){ var e = window.__vlx || {}; var c = e.custom || (e.custom = {}); c[${JSON.stringify(name)}] = ${src}; return true })()`);
+  }
+
+  /** Pre-parse selectors inside the page so subsequent actions skip parsing. */
+  async warm(selectors) {
+    const list = [].concat(selectors);
+    return this.evalSync(`__vlx.warm(${JSON.stringify(list)})`);
+  }
+
+
   /* ---------------------------------------------- selectors ---------------------------------------------- */
 
   $(sel) { return new Locator(this, sel); }
@@ -478,7 +548,9 @@ export class VeloxPage extends Emitter {
   texts(sel, limit) { return this.evalSync(this._x('texts', sel, limit || 0)); }
   attrs(sel, name, limit) { return this.evalSync(this._x('attrs', sel, name, limit || 0)); }
 
-  async waitForSelector(sel, { timeout = 10000, state = 'visible', _filters } = {}) {
+  async waitForSelector(sel, opts = {}) {
+    const { state = 'visible', _filters } = opts;
+    const { timeout } = this._to(opts);
     const deadline = Date.now() + timeout;
     const expr = (_filters && Object.keys(_filters).length)
       ? `__vlx.waitPick(${JSON.stringify(sel)}, ${JSON.stringify(_filters)}, SLICE, ${JSON.stringify(state)})`
@@ -528,7 +600,9 @@ export class VeloxPage extends Emitter {
 
   /* ------------------------------------------------ actions --------------------------------------------- */
 
-  async click(sel, { timeout = 10000, button = 'left', clicks = 1, modifiers = [], delay = 0, inPage = false, _filters } = {}) {
+  async click(sel, opts = {}) {
+    const { button = 'left', clicks = 1, modifiers = [], delay = 0, inPage = false, _filters } = opts;
+    const { timeout } = this._to(opts);
     await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `click ${sel}`).catch((e) => { if (e instanceof TimeoutError && timeout <= 0) {} else throw e; });
     if (inPage) { await this.eval(this._x('clickInPage', sel)); return; }
     const p = await this.evalSync(_filters && Object.keys(_filters).length
@@ -548,7 +622,9 @@ export class VeloxPage extends Emitter {
   async focus(sel) { return this.eval(this._x('focus', sel)); }
 
   /** Fast untrusted fill: sets value + fires input/change events. One round-trip. */
-  async fill(sel, value, { timeout = 10000, _filters } = {}) {
+  async fill(sel, value, opts = {}) {
+    const { _filters } = opts;
+    const { timeout } = this._to(opts);
     await withTimeout(this.waitForSelector(sel, { timeout, _filters }), timeout, `fill ${sel}`);
     const ok = await this.evalSync(_filters && Object.keys(_filters).length
       ? `__vlx.fill(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}), ${JSON.stringify(value)})`
@@ -558,7 +634,9 @@ export class VeloxPage extends Emitter {
   }
 
   /** Trusted per-key typing. human=true adds jittered delays. */
-  async type(sel, text, { delay = 0, human = false, timeout = 10000, _filters } = {}) {
+  async type(sel, text, opts = {}) {
+    const { delay = 0, human = false, _filters } = opts;
+    const { timeout } = this._to(opts);
     await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `type ${sel}`);
     await this.evalSync(_filters && Object.keys(_filters).length
       ? `__vlx.focus(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}))`
@@ -859,8 +937,8 @@ export class VeloxPage extends Emitter {
   async colorScheme(scheme = 'dark') { await this.session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] }); return this; }
   async reducedMotion(v = 'reduce') { await this.session.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: v }] }); return this; }
   async emulate(device) {
-    const d = typeof device === 'string' ? DEVICES[device] : device;
-    if (!d) throw new Error(`Unknown device "${device}". Known: ${Object.keys(DEVICES).join(', ')}`);
+    const d = typeof device === 'string' ? (registeredDevices()[device] || DEVICES[device]) : device;
+    if (!d) throw new Error(`Unknown device "${device}". Known: ${Object.keys({ ...DEVICES, ...registeredDevices() }).join(', ')}`);
     const jobs = [this.setViewport(d.width, d.height, { mobile: d.mobile, dsf: d.dsf })];
     if (d.ua) jobs.push(this.setUA(d.ua, d.platform));
     if (d.touch) jobs.push(this.session.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }));

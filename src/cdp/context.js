@@ -38,6 +38,7 @@ export class BrowserContext extends Emitter {
     if (this._testIdAttr) o.testIdAttribute = this._testIdAttr;
     if (this._opts.serviceWorkers) o.serviceWorkers = this._opts.serviceWorkers;
     if (this._opts.httpCredentials) o.httpCredentials = this._opts.httpCredentials;
+    if (this._opts.proxy) o.proxy = this._opts.proxy;
     if (this._opts.bypassCSP) o.bypassCSP = true;
     if (this._opts.recordVideo) o.recordVideo = this._opts.recordVideo;
     o.context = this;

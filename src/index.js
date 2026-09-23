@@ -10,9 +10,11 @@ import { DEVICES } from './cdp/devices.js';
 import { ENGINE_SOURCE } from './cdp/inject.js';
 import { Pool } from './pool.js';
 import { open, scrape, LiteSession, BrowserSession } from './auto.js';
-import { fetch as liteFetch, CookieJar, needsJS } from './lite/engine.js';
+import { fetch as liteFetch, fetchAll as liteFetchAll, CookieJar, needsJS } from './lite/engine.js';
 import { parse as parseHtml } from './lite/html.js';
 import { expect } from './assert.js';
+import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
+import { config, getConfig, use, registerDevice, registeredDevices, plugins as pluginPresets, registeredPluginList } from './plugins.js';
 
 const velox = {
   /** Open a URL — lite HTTP first, real browser only if the page needs JS. */
@@ -21,6 +23,8 @@ const velox = {
   scrape,
   /** Raw fast HTTP fetch (no browser ever). */
   fetch: liteFetch,
+  /** Fetch many URLs in parallel over the keep-alive pool — no browser. */
+  fetchAll: liteFetchAll,
   /** Launch any installed Chromium-family browser. */
   launch,
   /** Launch with a persistent profile (extensions, logins). */
@@ -30,11 +34,24 @@ const velox = {
   /** List Chromium-family browsers installed on this machine. */
   detect: discoverBrowsers,
   Pool,
-  DEVICES,
+  DEVICES: new Proxy(DEVICES, { get: (t, k) => registeredDevices()[k] ?? t[k], has: (t, k) => k in registeredDevices() || k in t, ownKeys: (t) => [...new Set([...Object.keys(t), ...Object.keys(registeredDevices())])], getOwnPropertyDescriptor: (t, k) => ({ configurable: true, enumerable: true, value: registeredDevices()[k] ?? t[k] }) }),
   parseHtml,
   needsJS,
   CookieJar,
   expect,
+  ProxyPool,
+  checkProxy,
+  normalizeProxy,
+  /** Global defaults: velox.config({ timeout, engine, proxy, retries, … }) */
+  config,
+  /** Read the effective config. */
+  getConfig,
+  /** Register a plugin: velox.use(velox.plugins.blockImages()) */
+  use,
+  /** Built-in plugins: stealth, adblock, humanize, blockImages, retry, logger, proxyRotate */
+  plugins: pluginPresets,
+  /** Add a device preset: velox.registerDevice('pixel_9', { width, height, ua, … }) */
+  registerDevice,
   Browser,
   VeloxPage,
   BrowserContext,
@@ -50,7 +67,9 @@ const velox = {
 export {
   open, scrape, launch, launchPersistentContext, connect, discoverBrowsers, Pool, DEVICES,
   Browser, VeloxPage, BrowserContext, Locator, JSHandle, ElementHandle, LiteSession, BrowserSession,
-  WebSocketTracker, Download, liteFetch, parseHtml, needsJS, CookieJar, expect,
+  WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, expect,
+  ProxyPool, checkProxy, normalizeProxy, proxyFlags,
+  config, getConfig, use, registerDevice, registeredDevices, pluginPresets as plugins,
 };
 export default velox;
 export { velox };

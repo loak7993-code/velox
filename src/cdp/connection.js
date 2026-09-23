@@ -73,10 +73,12 @@ export class CdpConnection extends Emitter {
   }
 
   close() {
+    if (this.closed) return;
     this.closed = true;
     try { this.ws?.close(); } catch {}
     for (const p of this._pending.values()) { clearTimeout(p.timer); p.reject(new Error('closed')); }
     this._pending.clear();
+    this.emit('disconnect', new Error('CDP connection closed'));
   }
 
   _recv(raw) {

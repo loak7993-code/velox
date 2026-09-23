@@ -12,6 +12,30 @@ export function createSite() {
 
     if (path === '/api/data.json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ hello: 'world' })); }
     if (path === '/api/pixel.json') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end('{"px":1}'); }
+    // resets the connection on the first hit, then succeeds — exercises retry logic
+    if (path === '/flaky-reset') { globalThis.__flaky = 0; res.writeHead(200); return res.end('reset'); }
+    if (path === '/flaky') {
+      globalThis.__flaky = (globalThis.__flaky || 0) + 1;
+      if (globalThis.__flaky === 1) return void req.socket.destroy();
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end('<!doctype html><html><head><title>Flaky</title></head><body><h1 id="flaky">recovered</h1></body></html>');
+    }
+    if (path === '/api/delay') {
+      const ms = Math.min(2000, Number(new URL(req.url, 'http://x').searchParams.get('ms') || 0));
+      return void setTimeout(() => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"ok":true}'); }, ms);
+    }
+    if (path === '/heavy.html') {
+      const n = 120;
+      const body = '<!doctype html><html><head><title>Heavy Page</title></head><body><h1 id="heavy">heavy</h1>'
+        + Array.from({ length: n }, (_, i) => `<img src="/res/${i}.bin" alt="r${i}">`).join('')
+        + '<script src="/res/js.js"></script></body></html>';
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(body);
+    }
+    if (path.startsWith('/res/')) {
+      res.writeHead(200, { 'content-type': path.endsWith('.js') ? 'text/javascript' : 'application/octet-stream', 'cache-control': 'no-store' });
+      return res.end(path.endsWith('.js') ? 'window.__heavy=true' : Buffer.alloc(64, 3));
+    }
     if (path === '/api/echo' && req.method === 'POST') {
       let body = '';
       req.on('data', (c) => (body += c));

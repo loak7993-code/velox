@@ -107,9 +107,19 @@ export const ENGINE_SOURCE = String.raw`
     return [part.trim() || '*', filters];
   }
 
+  V.custom = {};   // user-registered selector engines: name → fn(value, root) → elements
+
   function matchPart(root, part) {
     var out = [];
     part = String(part).trim();
+    // custom engine: "name=value" (registered via page.addSelectorEngine)
+    var eq = part.indexOf('=');
+    if (eq > 0 && V.custom[part.slice(0, eq)]) {
+      try {
+        var res = V.custom[part.slice(0, eq)](part.slice(eq + 1), root);
+        return Array.prototype.slice.call(res || []);
+      } catch (e) { return []; }
+    }
     if (part.indexOf('xpath=') === 0) {
       var it = document.evaluate(part.slice(6), root, null, 7, null);
       var n; while ((n = it.iterateNext())) out.push(n);
@@ -160,7 +170,7 @@ export const ENGINE_SOURCE = String.raw`
     if (part.indexOf('nth=') === 0) { var ix = +part.slice(4); var all = matchPart(root, '*'); return all[ix] ? [all[ix]] : []; }
 
     var cssSel = part, filters;
-    var split = splitFilters(cssSel); cssSel = split[0]; filters = split[1];
+    var split = V._cachedFilters(cssSel); cssSel = split[0]; filters = split[1];
     var els;
     try { els = Array.prototype.slice.call(root.querySelectorAll(cssSel)); }
     catch (e) { return out; }
@@ -172,9 +182,10 @@ export const ENGINE_SOURCE = String.raw`
   // deep query: pierce shadow roots of everything under root (and root's own shadow root)
   function deepMatch(root, part) {
     var out = matchPart(root, part).slice();
+    var seen = new Set(out);
     function scanScope(scope, querySelf) {
       if (!scope) return;
-      if (querySelf) matchPart(scope, part).forEach(function (e) { if (out.indexOf(e) === -1) out.push(e); });
+      if (querySelf) matchPart(scope, part).forEach(function (e) { if (!seen.has(e)) { seen.add(e); out.push(e); } });
       var walk;
       try { walk = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT); } catch (e) { return; }
       var el;
@@ -188,16 +199,32 @@ export const ENGINE_SOURCE = String.raw`
     return out;
   }
 
+  // selector parsing is cached — the hot loop (extract / wait / click point) re-uses
+  // the parsed parts instead of re-splitting and re-parsing the same strings
+  V._parseCache = {};
+  V._split = function (sel) {
+    var c = V._parseCache[sel];
+    if (!c) { c = String(sel).split(/\s*>>\s*/); V._parseCache[sel] = c; }
+    return c;
+  };
+  V._filterCache = {};
+  V._cachedFilters = function (sel) {
+    var c = V._filterCache[sel];
+    if (!c) { c = splitFilters(sel); V._filterCache[sel] = c; }
+    return c;
+  };
+
   V.match = function (sel, root) {
     root = root || document;
     if (sel && typeof sel === 'object') return [sel];
-    var parts = String(sel).split(/\s*>>\s*/);
+    var parts = V._split(sel);
     var cur = [root];
     for (var i = 0; i < parts.length; i++) {
       var next = [];
+      var seen = new Set();
       for (var j = 0; j < cur.length; j++) {
         var found = (parts.length > 1) ? deepMatch(cur[j], parts[i]) : matchPart(cur[j], parts[i]);
-        for (var k = 0; k < found.length; k++) if (next.indexOf(found[k]) === -1) next.push(found[k]);
+        for (var k = 0; k < found.length; k++) if (!seen.has(found[k])) { seen.add(found[k]); next.push(found[k]); }
       }
       cur = next;
       if (!cur.length) return [];
@@ -455,6 +482,18 @@ export const ENGINE_SOURCE = String.raw`
     }
     var el = sel ? resolve(sel) : document.body;
     return el ? snap(el, 0) : '';
+  };
+
+  // register a custom selector engine (used by Page.addSelectorEngine)
+  V.defineEngine = function (name, fnSource) {
+    V.custom[name] = (0, eval)('(' + fnSource + ')');
+    return true;
+  };
+
+  // pre-parse selectors so later actions skip the parsing cost entirely
+  V.warm = function (selectors) {
+    (selectors || []).forEach(function (s) { V._split(s); splitFilters(String(s)); });
+    return (selectors || []).length;
   };
 
   // exposed-binding plumbing (see Page.expose)

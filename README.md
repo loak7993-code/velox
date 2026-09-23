@@ -3,6 +3,7 @@
 <img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
+[![tests](https://img.shields.io/badge/tests-211%2F211-brightgreen)](https://github.com/loak7993-code/velox/actions)
 [![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
@@ -302,6 +303,125 @@ Polling assertions with `.not` — pair them with any test runner.
 
 ---
 
+### Speed controls
+
+```js
+// independent actions over ONE pipelined flush instead of one round-trip each
+await page.batch([['fill', '#user', 'a'], ['fill', '#pw', 'b'], ['click', '#go'], ['text', '.welcome']]);   // 4× faster
+
+// static pages in parallel, no browser at all
+const pages = await velox.fetchAll(urls, { concurrency: 16 });        // 11× faster than sequential
+
+// pre-parse selectors the page will keep using (hot scraping loops)
+await page.warm(['.product', '.product .price', 'a.next']);
+```
+
+| knob | effect |
+|---|---|
+| `page.batch(actions)` | 5 independent actions: **8 ms → 2 ms (4×)** |
+| `velox.fetchAll(urls, {concurrency})` | 24 latency-bound pages: **987 ms → 90 ms (11×)** |
+| `page.warm(selectors)` | in-page parse cache; long selector chains also went O(n²) → O(n) |
+| `newPage({ capture: false })` | skips the Network domain entirely — lighter page + faster loads, no request log |
+| `velox.config({ timeout })` | one default for every action; override per page with `page.setDefaultTimeout(ms)` |
+
+### Proxies
+
+Real proxy support at every layer — **including the browser-free lite engine**, so a
+scrape can rotate exits without ever launching Chrome.
+
+```js
+// one-shot checks: status, latency, exit IP
+await velox.checkProxy('socks5://user:pass@host:1080');        // → { ok, status, ms, ip }
+
+// lite engine, no browser
+await velox.fetch(url, { proxy: 'http://user:pass@host:8080' });
+await velox.fetchAll(urls, { proxy: pool.next().toProxy(), concurrency: 10 });
+
+// browsers: launch-level or per-context (isolated cookie jar + its own exit)
+const browser = await velox.launch({ proxy: 'http://user:pass@host:8080' });
+const ctx = await browser.newContext({ proxy: { server: 'socks5://host:1080', bypass: ['*.internal'] } });
+
+// rotating pool: strategies, sticky sessions, health checks, automatic ejection
+const pool = new velox.ProxyPool(proxies, { strategy: 'least-latency', maxFailures: 3, cooldownMs: 60_000 });
+await pool.healthCheck({ url: 'https://example.com', ipUrl: 'https://api.ipify.org' });
+const proxy = pool.sticky('account-42');                       // same exit for the same key
+await pool.withProxy((p) => velox.fetch(url, { proxy: p }));   // retries the next healthy exit
+pool.stats();                                                  // per-proxy uses/failures/latency/ejection
+```
+
+Supported: `http`, `https`, `socks4`, `socks5`, with inline or explicit credentials
+(`user:pass@host`), bypass lists, and proxy auth handled through the CDP auth
+challenge (`source: "proxy"`) for browsers plus direct `Proxy-Authorization` for lite.
+Or rotate automatically across browsers:
+
+```js
+velox.use(velox.plugins.proxyRotate(pool));    // each launch() gets the next exit
+```
+
+Verified against a live residential proxy: HTTP + HTTPS (CONNECT/​TLS), rotating exit
+IPs, browser + context-level routing, and pool ejection. A from-scratch HTTP+CONNECT
+and SOCKS5 proxy server ships in `test/site/proxy.js` so proxying is tested offline too.
+
+### Stability
+
+```js
+// retry transient failures (dropped sockets, timeouts)
+const page = await velox.open(url, { retries: 2, retryDelay: 300 });
+
+// long-running remote browsers: keep the connection alive across drops
+const browser = await velox.connect('ws://remote:9222', { autoReconnect: true });
+browser.on('reconnected', ({ attempt }) => console.log('back after', attempt));
+
+await browser.healthy();            // cheap liveness probe
+await browser.reconnect();          // manual: re-attaches every existing page object
+```
+
+A reconnected browser keeps **the same page objects working** — sessions are
+re-attached, init scripts and route interception re-armed — instead of forcing you
+to rebuild state. Also: `velox.open` retries only *transient* errors (never a 404),
+a dropped CDP link raises a clear error instead of a silent hang, and a sandbox
+failure self-heals (see the FAQ).
+
+### Customisation
+
+```js
+// global defaults, also loadable from $VELOX_CONFIG (JSON) or VELOX_* env vars
+velox.config({ timeout: 20000, engine: 'auto', proxy: 'socks5://host:1080', retries: 1, ads: true });
+
+// plugins: hook any stage of the lifecycle
+velox.use({
+  name: 'my-plugin',
+  pageOptions: (o) => ({ ...o, headers: { ...o.headers, 'x-team': 'scraping' } }),
+  onPage: (page) => page.on('pageerror', (e) => console.error(e.text)),
+});
+
+// built-in plugins
+velox.use(velox.plugins.stealth());
+velox.use(velox.plugins.adblock());
+velox.use(velox.plugins.blockImages());     // skip images/fonts/media — big speed win
+velox.use(velox.plugins.humanize());        // human-ish typing + cursor paths
+velox.use(velox.plugins.retry(2));
+velox.use(velox.plugins.logger({ requests: true }));
+velox.use(velox.plugins.proxyRotate(pool));
+
+// your own selector syntax, evaluated inside the page
+await page.addSelectorEngine('priceabove', (value, root) =>
+  [...root.querySelectorAll('[data-price]')].filter((el) => +el.dataset.price > +value));
+await page.count('priceabove=25');          // works with >> chains, waits and extract too
+await page.text('section.box >> priceabove=25');
+
+// your own device preset
+velox.registerDevice('pixel_9', { width: 412, height: 915, dsf: 2.6, mobile: true, ua: '…' });
+```
+
+CLI:
+
+```bash
+vlx check-proxy 'http://user:pass@host:8080' --ip https://api.ipify.org
+vlx open example.com --proxy socks5://127.0.0.1:1080 --retries 2
+vlx open example.com --config ./velox.json
+```
+
 ## Coming from Playwright
 
 | Playwright | velox |
@@ -483,6 +603,19 @@ works for every `velox.open`/`velox.launch()` call without touching your code.
 `goto` resolves at `DOMContentLoaded` — the HTTP status arrives with the
 response, usually before. With `waitUntil: 'none'` the navigation returns
 before the response lands; read `page.status` after, or use `waitUntil: 'load'`.
+</details>
+
+<details>
+<summary><b>My local proxy sees no traffic to localhost — why?</b></summary>
+
+Chrome bypasses loopback addresses by default (same as Playwright/Puppeteer). To
+force local targets through a proxy, add it to the bypass list the Chrome way:
+
+```js
+proxy: { server: 'http://127.0.0.1:8080', bypass: ['<-loopback>'] }
+```
+
+Remote proxies and remote targets are unaffected.
 </details>
 
 <details>
