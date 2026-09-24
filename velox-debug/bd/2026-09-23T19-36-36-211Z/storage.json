@@ -1,0 +1,27 @@
+{
+  "local": {
+    "uw-icon-locales": "{\"version\":\"2026-09-01-10-22-26\",\"en-US\":{\"widget\":{\"html_lst_title\":\"Translations Menu\",\"html_title\":\"Accessibility Menu\",\"text_icon_small\":\"Accessibility\",\"text_icon_large\":\"Accessibility</br>Menu\",\"new_tab\":\"opens in a new tab\",\"new_tab_substring\":\"new tab\",\"new_window_substring\":\"new window\",\"broken_links\":{\"target_site_not_available\":\"target website may not be available\"}},\"skip_links\":{\"open_accessibility_nav\":\"Open the Accessible Navigation Menu\",\"open_accessibility_menu\":\"Open the accessibility menu\",\"skip\":\"Skip to main content\",\"enable_visually_impaired\":\"Enable accessibility for low vision\",\"disable_visually_impaired\":\"Disable accessibility for low vision\",\"title\":\"Quick Accessibility Options\"}}}",
+    "eng_mt": "{\"ver\":36,\"sessionStartTime\":1790192195693,\"scrollDepth\":0,\"sessionDepth\":[\"516369002\"],\"timeOnSite\":0,\"crossSessionsData\":{\"sessionsHistory\":[1790192195693]}}",
+    "cp_theme": "system",
+    "brd_event3": "{\"event\":\"direct\",\"first\":1790192191214,\"last\":1790192191214,\"count\":1,\"qs\":{\"hs_signup\":\"1\"},\"page\":\"https://brightdata.com/?hs_signup=1\",\"pathname\":\"/\"}",
+    "_gcl_ls": "{\"schema\":\"gcl\",\"version\":1,\"gcl_ctr\":{\"value\":{\"value\":0,\"timeouts\":0,\"errors\":0,\"eopCount\":0,\"creationTimeMs\":1790192141867},\"expires\":1797968141867},\"gsid_dc\":{\"value\":{\"joinId\":\"Aur1HNwUoBEucUkJzNvvHzsa4Xn3GgiSeg\",\"lastJoinedTimeMs\":1790192141874},\"expires\":1790192441874}}",
+    "uw-uid": "99efc405-2468-4737-94bd-02410d922ab8",
+    "www_lum_cp_load_time": "1790192139438",
+    "uuid_persistent": "bb3f641f-547b-48af-8427-0cec25cd1be6",
+    "first_page_visited": "/cp/signup",
+    "signup_referrer": "",
+    "uw-tunings": "{\"tunings\":{\"widget_color\":\"#244E9D\",\"widget_language\":null,\"widget_sounds\":false,\"widget_position_nudge\":\"{\\\"moveX\\\":0,\\\"moveY\\\":0,\\\"xOrientation\\\":\\\"left\\\",\\\"yOrientation\\\":\\\"top\\\"}\",\"widget_position\":\"2\",\"widget_icon_type\":\"1\",\"widget_icon_size\":\"mini\",\"site_name\":\"brightdata.com\",\"isLAUser\":false,\"widget_no_report\":true,\"dynamic_alpine_images_processing\":true,\"new_manage\":true},\"services\":{\"siteId\":1153307,\"userId\":87825,\"noManage\":false,\"noLogo\":false,\"paidAi\":false},\"imageAlt\":{\"version\":\"ALTS_V2\",\"resourceHash\":\"yE4EFPnCWxXkqVWO\",\"tier\":\"FREE_QUOTA_TIER\",\"quota\":5,\"usage\":5,\"state\":\"ALTS_OFF\",\"missingAlts\":[]},\"widgetCustomLanguages\":[],\"invalidAccountId\":false,\"existingWidgetType\":\"free\"}",
+    "brd_falcon_id": "c9af512a-ec02-4f92-acf7-d1278ffee349",
+    "signup_page": "/?hs_signup=1",
+    "vwoSn": "{\"v\":\"0.1.0\",\"lt\":\"1790192181\",\"r\":\"https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup\",\"cu\":\"https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1\"}",
+    "uw-tunings-checksum": "5a8d949f8fdd4dcd355bdf3f7c059aa253b23e7d0f4b6cef32ccdef02c70027b",
+    "li_adsId": "4774b593-dd0f-477d-b018-acabdd4417d7",
+    "_vwo_645829_config": "{}"
+  },
+  "session": {
+    "mp_tab_id_mixpanel_f6ddaef254cfb0b8455d909449a24693": "$tab-e2fb478c-40aa-43ac-9cbb-75fd29336c6d",
+    "_cq_tuid": "1.1790192196.a7zSRafn2Fm6jhQD",
+    "_cfPre_tabId": "9fb4cba4-19f3-48d5-b54d-064a29cfe896",
+    "_cltk": "147yaz"
+  }
+}

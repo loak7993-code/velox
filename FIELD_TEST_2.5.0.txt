@@ -1,0 +1,150 @@
+════════════════════════════════════════════════════════════════════════════
+  VELOX 2.5.0 — FIELD TEST RESULTS  (CORRECTED)
+  Tested live: 2026-09-23 against the exact targets that failed before
+  example.com · api.ipify.org via authenticated IPRoyal proxy · Bright Data Turnstile
+════════════════════════════════════════════════════════════════════════════
+
+RESULT: 9/9 new APIs work. The three walls are DOWN.
+
+  An earlier draft of this report flagged 2 "bugs" in detectChallenge.
+  DEEPER TESTING SHOWED THEY WERE BOTH FALSE ALARMS — same root cause:
+  the Bright Data SPA takes ~15s to render the widget, and detectChallenge
+  is a POINT-IN-TIME snapshot. Nothing wrong with the markers or the
+  selector engine. Details + 1 real ergonomic suggestion at the bottom.
+
+
+════════════════════════════════════════════════════════════════════════════
+✅ PASS — walls down (verified against the live failures from today)
+════════════════════════════════════════════════════════════════════════════
+
+[1] eval serialization — 14/14   (was a silent {} for objects ALL DAY)
+    ✅ string number array object nested-object boolean null
+    ✅ document.title  ✅ innerText.length  ✅ scripts.length
+    ✅ Object.keys(document)  ✅ function-form  ✅ querySelectorAll  ✅ map→array
+
+      await page.eval('[1,2,3]')                     → [1,2,3]
+      await page.eval('({x:{y:[1,2,{z:"deep"}]}})')  → full nested
+      await page.eval('() => document.title')        → "Example Domain"
+
+[2] waitForLoadState('load', 5000)  ✅ exists + runs   (was: not a function)
+
+[3] proxyForward + AUTHENTICATED upstream  ✅   (was: 40 min lost to a hand-rolled forwarder)
+      const px = await velox.proxyForward({
+        server: 'http://geo.iproyal.com:12321',
+        username: 'V7CPpfXDqljBNFTZ',
+        password: 'FzOXHZ1bwTiOyP9R_country-us' });
+      // → { server:'http://127.0.0.1:37285', direct:false, upstream:'…', stats:{…} }
+      launch({ proxy: px }) → api.ipify.org → 99.140.111.200  (US residential) ✅
+
+[4] importSession / importCurl  ✅
+      5 cookies in (2 bare-domain, 1 dupe, 1 domainless) → { imported: 3 }
+        • bare 'example.com' → dotted '.example.com'   ✅  (THE hybrid-pipeline bug)
+        • later-wins dedupe                           ✅
+        • domainless entry skipped (reported)         ✅
+      importCurl('cookie: x=1; y=2; z=3') → { imported: 3 }  ✅
+
+[5] waitForCaptchaToken()  ✅  and it DIAGNOSES (was a silent null)
+      timeout → state: "widget present but token field missing"
+                detail: {tokenLength:0, found:false, widget:1, scriptLoaded:false}
+      (that detail object pointed straight at the real condition)
+
+[6] debugDump()  ✅  { dir, url, title, errors[], console[], requests, cookies }
+      Replaces the ~10 bespoke dump scripts written today.
+
+[7] netlog() + response bodies  ✅
+      entries expose { url, status, headers, method, postData, entry,
+                       text, body, json }  — await entry.json() works ✅
+
+[8] waitForResponse  ✅ exists
+
+[9] gotoWithRetry  ✅  retries, onAttempt({attempt,ms,status}), throws after exhaustion
+
+
+════════════════════════════════════════════════════════════════════════════
+VERIFICATION: detectChallenge() is CORRECT — the null was timing
+════════════════════════════════════════════════════════════════════════════
+
+Evidence 1 — selector engine is exact (velox.count === native, every case):
+      ✅ 0     0     [id^="turnstile_container"]
+      ✅ 0     0     [id^=turnstile_container]
+      ✅ 0     0     .cf-turnstile
+      ✅ 0     0     [class*="turnstile"]
+      ✅ 0     0     iframe[src*="challenges.cloudflare.com"]
+      ✅ 0     0     input[name="cf-turnstile-response"]
+      ✅ 0     0     input
+      ✅ 720   720   [id]
+      → prefix/substring attr selectors work perfectly.
+
+Evidence 2 — same page, detectChallenge over time:
+      [+3s ] type=null  inputs=0  tsNodes=0     ← SPA not rendered yet
+      [+6s ] type=null  inputs=0  tsNodes=0
+      [+9s ] type=null  inputs=0  tsNodes=0
+      [+12s] type=null  inputs=0  tsNodes=0
+      [+15s] type=null  inputs=25 tsNodes=1     ← widget appears
+      [+18s] type="turnstile" containerId="turnstile_container_372130478885"  ✅
+      [+21s] type="turnstile" tokenPresent=false
+      … stays correct from there
+
+Evidence 3 — scriptLoaded signal is fine once the page has rendered:
+      window.turnstile = "object"
+      script src regex hit = true
+      DOM has: challenges.cloudflare.com/turnstile/v0/api.js?render=explicit
+      (the earlier scriptLoaded:false was the same not-yet-rendered race)
+
+
+════════════════════════════════════════════════════════════════════════════
+ONE REAL ERGONOMIC SUGGESTION (would have saved me an hour of confusion)
+════════════════════════════════════════════════════════════════════════════
+
+detectChallenge(page) is a bare snapshot. On SPAs that build the widget after
+hydration (Bright Data: ~15s!) it legitimately returns {type:null} — which looks
+identical to "no captcha here." I spent real time chasing a non-existent
+selector bug. Suggest:
+
+    await page.detectChallenge({ wait: true, timeout: 20000 })
+    // polls until a widget appears (or timeout), instead of a one-shot snapshot
+
+and in waitForCaptchaToken's auto path: when detectChallenge is null, poll all
+WIDGETS for appearance BEFORE falling back to WIDGETS[0] (recaptcha). Right now
+a null detection immediately assumes recaptcha and looks for the wrong token
+field. Same fix, one place.
+
+Hardening nit (optional): make scriptLoaded authoritative on the window object —
+  turnstile : typeof window.turnstile  !== 'undefined'
+  recaptcha : typeof window.grecaptcha !== 'undefined'
+  hcaptcha  : typeof window.hcaptcha   !== 'undefined'
+  arkose    : typeof window.Arkose     !== 'undefined'
+  awswaf    : !!window.awsWafCookieDomainList
+A src scan can race; window.turnstile cannot lie.
+
+Also: detectChallenge returns only found[0]. On this page a userway iframe
+(accessibility overlay) coexists with the widget — returning ALL matches, or
+excluding known-noisy iframes, would be friendlier.
+
+
+════════════════════════════════════════════════════════════════════════════
+TARGET BEHAVIOUR NOTE (not a velox issue)
+════════════════════════════════════════════════════════════════════════════
+
+On the Bright Data page the widget renders but tokenPresent stays false —
+the Cloudflare challenge does not complete in this automated environment /
+via these exit IPs. velox now REPORTS that precisely ("widget present but
+token field missing", detail with scriptLoaded/widget counts) instead of
+hiding it — which is exactly the diagnostic behaviour that was requested.
+
+
+════════════════════════════════════════════════════════════════════════════
+VERDICT
+════════════════════════════════════════════════════════════════════════════
+
+Requested fixes: all landed and verified against the live targets.
+  #1 eval serialization  → 14/14  ✅
+  #2 proxy auth reliability (+proxyForward, +importSession)  → ✅
+  #3 captcha plumbing (waitForCaptchaToken + detectChallenge + debugDump
+     + netlog + gotoWithRetry)  → ✅ (with one ergonomic suggestion above)
+
+Nothing broken. The only follow-up worth doing is the `{wait}` option on
+detectChallenge so a not-yet-rendered SPA doesn't read as "no captcha."
+
+Test scripts: velox/fieldtest1..5.mjs, seltest.mjs, timetest.mjs, scripttest.mjs
+════════════════════════════════════════════════════════════════════════════

@@ -110,6 +110,98 @@ export function createSite() {
           setTimeout(function () { document.getElementById('timer').textContent = 'fired'; }, 30000);
         </script></body></html>`);
     }
+    // ── signup risk scorer: implements the signal families real engines use ──
+    // (fingerprint coherence · identity-data coherence · behavioural regularity ·
+    //  device/IP linkage · velocity). Lets velox's account tooling be verified offline.
+    if (path === '/api/signup-reset') { globalThis.__signups = { devices: new Map(), recent: [], emails: new Set(), postal: new Map() }; res.writeHead(200); return res.end('reset'); }
+    if (path === '/api/signup' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        let p = {};
+        try { p = JSON.parse(body); } catch {}
+        const f = p.form || {}, d = p.device || {}, b = p.behaviour || {};
+        const reasons = [];
+        let score = 100;
+
+        // ── fingerprint coherence ──
+        if (d.webdriver !== null && d.webdriver !== undefined) { reasons.push('automation: navigator.webdriver present'); score -= 25; }
+        if (d.headless) { reasons.push('automation: headless user agent'); score -= 25; }
+        if (!d.plugins) { reasons.push('fingerprint: no plugins (stripped browser)'); score -= 10; }
+        if (!d.chrome) { reasons.push('fingerprint: window.chrome missing'); score -= 10; }
+        if (d.gl && /swiftshader|llvmpipe|software|mesa/i.test(String(d.gl.renderer))) { reasons.push('fingerprint: software WebGL renderer'); score -= 20; }
+        if (!d.userAgentData) { reasons.push('fingerprint: no userAgentData (UA/CH mismatch)'); score -= 8; }
+        if (d.ua && d.userAgentData === 'Windows' && !/Windows NT/.test(d.ua)) { reasons.push('fingerprint: UA says non-Windows but Client Hints say Windows'); score -= 15; }
+        if (d.storage === false) { reasons.push('fingerprint: storage blocked'); score -= 5; }
+
+        // ── identity-data coherence ──
+        const phones = { US: /^\+1[\s-]/, GB: /^\+44/, DE: /^\+49/, FR: /^\+33/, BR: /^\+55/, IN: /^\+91/, JP: /^\+81/, ES: /^\+34/, NL: /^\+31/, PL: /^\+48/, ID: /^\+62/ };
+        if (f.country && phones[f.country] && !phones[f.country].test(String(f.phone || '').trim())) { reasons.push('identity: phone does not match the selected country'); score -= 20; }
+        if (f.country === 'US' && !/^\d{5}(-\d{4})?$/.test(String(f.postalCode || ''))) { reasons.push('identity: US postal code format invalid'); score -= 12; }
+        if (f.country === 'GB' && !/^[A-Z]{1,2}\d/.test(String(f.postalCode || '').toUpperCase())) { reasons.push('identity: UK postcode format invalid'); score -= 12; }
+        if (f.country === 'DE' && !/^\d{5}$/.test(String(f.postalCode || ''))) { reasons.push('identity: German PLZ must be 5 digits'); score -= 12; }
+        if (!f.dob) { reasons.push('identity: no date of birth'); score -= 8; }
+        else {
+          const age = (Date.now() - Date.parse(f.dob)) / 31557600000;
+          if (age < 18) { reasons.push('identity: under 18'); score -= 25; }
+          else if (age > 95) { reasons.push('identity: implausible age'); score -= 15; }
+        }
+        const local = String(f.email || '').split('@')[0].toLowerCase();
+        const nameBits = String(f.name || '').toLowerCase().split(/\s+/).map((x) => x.replace(/[^a-z]/g, '')).filter(Boolean);
+        if (local && nameBits.length && !nameBits.some((n) => n && (local.includes(n) || n.includes(local.slice(0, 4))))) { reasons.push('identity: email local-part unrelated to the name'); score -= 10; }
+        if (/mailinator|guerrillamail|10minutemail|tempmail|yopmail|trashmail/i.test(String(f.email || ''))) { reasons.push('identity: disposable email domain'); score -= 25; }
+        if (!f.tos) { reasons.push('identity: terms not accepted'); score -= 5; }
+
+        // ── behavioural regularity ──
+        const ki = b.keyIntervals || [], mi = b.moveIntervals || [];
+        const stdev = (a) => { if (a.length < 2) return 0; const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length); };
+        const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+        const uniq = (a) => new Set(a.map((x) => Math.round(x / 5))).size;
+        if (ki.length < 5) { reasons.push('behaviour: almost no keystroke timing (filled by script)'); score -= 25; }
+        else if (mean(ki) > 0 && stdev(ki) / mean(ki) < 0.08) { reasons.push('behaviour: metronomic typing (constant interval)'); score -= 25; }
+        if (mi.length < 5) { reasons.push('behaviour: no pointer movement'); score -= 15; }
+        else if (stdev(mi) < 1.5) { reasons.push('behaviour: perfectly regular pointer movement'); score -= 10; }
+        if ((b.downs || 0) === 0 || (b.ups || 0) === 0) { reasons.push('behaviour: form submitted without a click'); score -= 10; }
+        if (b.firstInputMs != null && b.firstInputMs < 250) { reasons.push('behaviour: typed within 250ms of load'); score -= 12; }
+        if ((b.paste || 0) > 0) { reasons.push('behaviour: paste into the form'); score -= 8; }
+
+        // ── device linkage + velocity ──
+        globalThis.__signups = globalThis.__signups || { devices: new Map(), recent: [], emails: new Set(), postal: new Map() };
+        const S = globalThis.__signups;
+        const deviceKey = [d.ua, d.canvas, d.gl && d.gl.renderer, d.screen && d.screen.join('x'), d.timezone].join('|');
+        const deviceHash = createHash('sha1').update(deviceKey).digest('hex').slice(0, 12);
+        if (S.devices.has(deviceHash)) { reasons.push('linkage: this device fingerprint already created an account'); score -= 30; }
+        S.devices.set(deviceHash, (S.devices.get(deviceHash) || 0) + 1);
+        if (S.emails.has(String(f.email).toLowerCase())) { reasons.push('linkage: email already used'); score -= 20; }
+        S.emails.add(String(f.email).toLowerCase());
+        // velocity per exit (IP), like a real engine: same fingerprint OR same IP too fast
+        const now = Date.now();
+        const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'local').toString();
+        S.recent = S.recent.filter((e) => now - e.t < 60000 && e.ip === ip);
+        const perDevice = S.recent.filter((e) => e.device === deviceHash).length;
+        S.recent.push({ t: now, ip, device: deviceHash });
+        if (S.recent.length > 3) { reasons.push(`velocity: ${S.recent.length} signups from this exit in the last minute`); score -= 20; }
+        else if (perDevice > 2) { reasons.push(`velocity: this device created ${perDevice + 1} accounts in the last minute`); score -= 20; }
+        const addrKey = [f.line1, f.postalCode].join('|');
+        if (S.postal.has(addrKey)) { reasons.push('linkage: address already used by another account'); score -= 15; }
+        S.postal.set(addrKey, (S.postal.get(addrKey) || 0) + 1);
+
+        score = Math.max(0, Math.min(100, score));
+        const ok = score >= 60;
+        const verificationRequired = score >= 35 && score < 60;
+        const out = { ok, score, verificationRequired, reasons, deviceHash };
+        const headers = {
+          'content-type': 'application/json',
+          'x-risk-score': String(score),
+          'x-risk-reasons': String(reasons.length),
+          ...(ok ? { 'set-cookie': [`sid=${Math.random().toString(36).slice(2)}; Path=/`, `device_id=${deviceHash}; Path=/; Max-Age=86400`] } : {}),
+        };
+        res.writeHead(ok ? 201 : verificationRequired ? 202 : 403, headers);
+        res.end(JSON.stringify(out));
+      });
+      return;
+    }
+
     // ── mock bot-management challenges (local, deterministic) ────────────────
     // Cloudflare-like: JS challenge that inspects the environment, then a fake
     // Turnstile widget whose checkbox must be clicked before the clearance cookie lands

@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Arkose (real widget) — velox integration test</title></head>
+<body>
+<h1>Signup with Arkose protection</h1>
+<form id="f">
+  <label>Email <input name="email" id="email"></label>
+  <!-- the real Arkose Enforcement drop-in, using Arkose's public test key -->
+  <div id="arkose" data-pkey="DEADBEEF-DEAD-BEEF-DEAD-BEEFDEADBEEF"></div>
+  <button id="go">Continue</button>
+</form>
+<script src="https://client-api.arkoselabs.com/v2/DEADBEEF-DEAD-BEEF-DEAD-BEEFDEADBEEF/api.js" async></script>
+<script>
+  // record what the real platform does to this page, for assertions
+  window.__arkose = { scriptLoaded: false, iframes: [], ready: false, error: null };
+  addEventListener('error', (e) => { if (/arkose/i.test(e.filename || '')) window.__arkose.error = String(e.message || e); }, true);
+  const iv = setInterval(() => {
+    window.__arkose.scriptLoaded = !!document.querySelector('script[src*="arkoselabs.com"]');
+    window.__arkose.iframes = [...document.querySelectorAll('iframe')].map((f) => f.src);
+    if (window.ArkoseEnforcement || window.arkoseEnforcement) window.__arkose.ready = true;
+  }, 200);
+</script>
+</body>
+</html>

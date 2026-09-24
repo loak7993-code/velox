@@ -20,6 +20,19 @@
 
   // ── CDP / automation artifacts ────────────────────────────────────────────
   add('webdriver flag', 3, navigator.webdriver === undefined, String(navigator.webdriver));
+  // descriptor-level check (sannysoft's "WebDriver (New)" + creepjs): our patches must not
+  // appear as own properties of the navigator instance — real Chrome inherits them
+  add('navigator patches are inherited, not own props', 3, safe(() => {
+    var owned = Object.getOwnPropertyNames(navigator);
+    var suspicious = ['webdriver','platform','vendor','language','languages','hardwareConcurrency','deviceMemory','maxTouchPoints','plugins','mimeTypes','userAgentData','connection'];
+    return !owned.some(function (k) { return suspicious.indexOf(k) !== -1; });
+  }, false), safe(() => Object.getOwnPropertyNames(navigator).filter(function (k) { return /webdriver|plugins|platform|languages/.test(k); }).join(',') || 'clean', ''));
+  add('webdriver descriptor matches a clean browser', 2, safe(() => {
+    var inst = Object.getOwnPropertyDescriptor(navigator, 'webdriver');
+    var proto = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(navigator), 'webdriver');
+    return inst === undefined && !!proto;
+  }, false), 'descriptor shape');
+  add('no Firefox/iOS-only surfaces', 2, safe(() => !('oscpu' in navigator) && !('standalone' in navigator), false), safe(() => ['oscpu','standalone'].filter(function (k) { return k in navigator; }).join(','), ''));
   add('no cdc_ / $cdc_ props', 3, !Object.keys(document).some((k) => /cdc_|\$cdc_/.test(k)) && !Object.keys(window).some((k) => /cdc_|selenium|webdriver|_phantom|__nightmare/i.test(k)), Object.keys(window).filter(k => /cdc_|selenium|webdriver|__vlx/i.test(k)).join(',') || 'none');
   add('no automation globals on window', 3, !Object.keys(window).some((k) => /^(__playwright|__puppeteer|__pw_manual|_phantom|__nightmare|callSelenium)/i.test(k)), Object.keys(window).filter((k) => /playwright|puppeteer|phantom|nightmare|__vlx/i.test(k)).join(',') || 'none');
   add('Runtime.enable side effect (console.debug arity)', 1, safe(() => typeof console.debug === 'function', false), 'console.debug available');

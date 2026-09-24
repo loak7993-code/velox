@@ -633,6 +633,108 @@ await page.extract('.product', { text: true, attrs: ['data-sku', 'href'], html: 
 await page.tables();  await page.meta();  await page.jsonld();  await page.readable();
 ```
 
+### Account-creation scoring (onboarding / new-account fraud controls)
+
+Signup risk engines score five families of signal. velox gives you a handle on each one,
+and **reports the score and the exact reasons** the target returned — so a run tells you
+which signal to fix instead of leaving you guessing.
+
+| family | what the engine looks at | what velox does |
+|---|---|---|
+| **fingerprint coherence** | UA ↔ Client Hints ↔ platform ↔ WebGL ↔ screen ↔ tz | `stealth` profiles (4 platforms, version-aligned to the real binary) |
+| **identity coherence** | phone country ↔ address ↔ postal format ↔ name ↔ email ↔ age | `velox.identity` — generates **and validates** (catches planted contradictions) |
+| **behavioural regularity** | keystroke/pointer interval variance, click presence, time-to-first-input, paste | `page.human.*` + `velox.behaviouralRegularity()` to measure it |
+| **cross-account linkage** | shared device fingerprint, cookie values, storage keys | a **fresh context per account** + `runner.verifyIsolation()` proof |
+| **velocity** | N accounts per exit/device per window | `paceMs`, `maxPerHour`, per-account proxy rotation |
+
+```js
+const id = velox.identity.generate({ country: 'DE', seed: 7 });
+// { fullName: 'Lukas Wagner', email: 'lukas.wagner@example.com', phone: '+49 30 5550062',
+//   address: { city: 'Hamburg', region: 'Hamburg', postalCode: '22765', country: 'Germany' },
+//   locale: 'ja-JP'→'de-DE', timezone: 'Europe/Berlin', dob, password, device: {...},
+//   coherence: { ok: true, issues: [] } }
+
+velox.identity.check({ ...id, phone: '+1 202-555-0123' });
+// → { ok: false, issues: [{ field: 'phone', why: '+1 202-555-0123 is not a DE number (expected +49)' }] }
+
+velox.identity.stealth(id);   // the matching browser environment (locale+tz+languages+seed)
+velox.identity.geo(id);       // what the exit IP must be consistent with
+```
+
+Run a declarative plan per identity — templated from the identity, executed with human
+behaviour, in an isolated context:
+
+```js
+const runner = new velox.AccountRunner({ browser, paceMs: [900, 2600], maxPerHour: 12 });
+
+const record = await runner.register({
+  url: 'https://site.example/signup',
+  identity: velox.identity.generate({ country: 'GB' }),
+  expect: { selector: '#welcome' },
+  steps: [
+    { fill: '#name', value: '@identity.fullName' },
+    { type: '#email', value: '@identity.email', cps: 6 },     // human cadence, not paste
+    { fill: '#phone', value: '@identity.phone' },
+    { select: '#country', value: '@identity.country' },
+    { fill: '#dob', value: '@identity.dob' },
+    { waitForCaptchaToken: undefined, optional: true },       // handle the widget if present
+    { humanClick: '#submit' },
+    { waitFor: '#welcome, #verify, #blocked', optional: true },
+  ],
+});
+
+record.risk;   // { score: 100, reasons: [], markers: ['x-risk-score: 100'], verificationRequired: false }
+record.steps;  // per-step ok/ms, so a failing step is named
+await runner.farm(plan, { count: 5, concurrency: 1 });        // paced, isolated, rotated exits
+runner.verifyIsolation();                                    // proves accounts aren't linkable
+runner.summary();                                            // one row per account: score, reasons, ms
+```
+
+**Verified against a local risk scorer** that implements those five families
+(`test/accounts.js`, 40 checks) — each family has a control case:
+
+```
+naive automation    → 403, score 0,  16 reasons (automation + identity + behaviour)
+identity+stealth+
+human behaviour     → 201, score 100, 0 reasons, account created
+same context reuse  → 2nd attempt flagged as the same device
+fresh contexts      → isolation proof clean, no shared cookie values
+rapid fire          → velocity flagged on the 4th signup from that exit
+paced run           → no velocity flag
+scripted typing     → machine-likeness 1.0 · human typing 0.0
+```
+
+### Tested against real platforms
+
+`npm run platforms` drives real vendors (network required) and reports what it found:
+
+| target | result |
+|---|---|
+| **Cloudflare Turnstile** — official demo, test key `1x0000…AA` | widget detected (type/sitekey/script/visibility), **and the real token is obtained**: `waitForCaptchaToken()` returned a 21-char token |
+| **hCaptcha** — official demo | detected as `hcaptcha` with iframe URL + sitekey (its reCAPTCHA-compat field is correctly outranked) |
+| **reCAPTCHA v2** — official demo | detected with sitekey read from the anchor iframe's `k=` parameter |
+| **Arkose Labs** — real `client-api.arkoselabs.com` script, public test key | script + container + sitekey identified before the challenge mounts |
+| **sannysoft bot detector** | **0 failed checks** |
+
+Detection is weighted, because real pages are ambiguous: hCaptcha's compat mode also emits
+`g-recaptcha-response`, and Cloudflare mounts Turnstile inside a *closed* shadow root — so
+evidence is scored (script/iframe > container > token field), shadow roots are pierced
+where the platform allows it, and the sitekey is read from the widget URL when the
+container has no `data-sitekey`.
+
+Live detector feedback also found and fixed a real fingerprint leak: `navigator.webdriver`
+was patched as an *own property of the instance*, which sannysoft's “WebDriver (New)”
+check reads as automation. All navigator patches are now mounted on `Navigator.prototype`
+(matching a clean browser's descriptor shape), `oscpu`/`standalone` (Firefox/iOS-only)
+are no longer added, and the local harness scores **78/78** with a descriptor-level check.
+
+**Honest limits.** creepjs and pixelscan still classify *headless mode* itself
+(5 and 8 surface mentions, and roughly the same with a full browser) — that is their
+purpose and no in-page patch changes it; every fingerprint-level check we control passes.
+IP reputation still decides the outcome on hostile targets, and an interactive image
+puzzle needs a human or a solving service. Use this for testing **your own** onboarding
+controls and for authorised engagements.
+
 ### Make it yours
 
 ```js

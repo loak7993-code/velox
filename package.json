@@ -1,7 +1,7 @@
 {
   "name": "velox-automation",
-  "version": "2.5.0",
-  "description": "Browser automation at terminal velocity. Zero dependencies, any installed Chrome/Chromium/Edge/Brave over CDP (or no browser at all). Playwright-compatible API plus coherent stealth profiles, human-like behaviour, Cloudflare/Akamai/PerimeterX challenge handling, proxies, bandwidth profiles, caching and deep extensibility.",
+  "version": "2.6.0",
+  "description": "Browser automation at terminal velocity. Zero dependencies, any installed Chrome/Chromium/Edge/Brave over CDP or no browser at all. Playwright-compatible API with coherent stealth profiles, human behaviour, Cloudflare/Akamai/PerimeterX/Arkose handling, account-creation scoring tooling, proxies, bandwidth profiles and deep extensibility.",
   "type": "module",
   "main": "./src/index.js",
   "module": "./src/index.js",
@@ -35,7 +35,8 @@
     "site": "node test/site/serve.js",
     "prepublishOnly": "npm test",
     "speed": "node test/speed.js",
-    "profile": "node test/profile.js"
+    "profile": "node test/profile.js",
+    "platforms": "node test/platforms.js"
   },
   "keywords": [
     "automation",

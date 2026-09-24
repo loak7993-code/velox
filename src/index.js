@@ -19,6 +19,8 @@ const pkg = createRequire(import.meta.url)('../package.json');
 import { ProxyPool, checkProxy, normalizeProxy, proxyFlags } from './proxy.js';
 import { proxyForward } from './forward.js';
 import { importSession, exportSession, normalizeCookies, parseCurlCookies, parseNetscapeCookies, importHAR } from './field.js';
+import { AccountRunner, generateIdentity, generateIdentities, checkIdentity as checkIdentityCoherence, identityStealth, identityGeo, behaviouralRegularity, readRiskReport, DISPOSABLE_EMAIL_DOMAINS } from './accounts.js';
+import { COUNTRIES as IDENTITY_COUNTRIES } from './identity.js';
 import { middleware, registerCommand, registerSelectorEngine, hook, registered as registeredExtensions, bindPrototypes } from './extend.js';
 import { PROFILES as STEALTH_PROFILES, GEO as STEALTH_GEO } from './cdp/stealth.js';
 import { detect as detectChallenge, engage as engageChallenge, goto as gotoChallenge, VENDORS as CHALLENGE_VENDORS } from './challenge.js';
@@ -94,6 +96,23 @@ const velox = {
   parseCurlCookies,
   parseNetscapeCookies,
   importHAR,
+  /**
+   * Coherent synthetic identities for onboarding/fraud-control testing:
+   *   velox.identity.generate({ country: 'DE', seed: 7 })
+   */
+  identity: {
+    generate: generateIdentity,
+    generateMany: generateIdentities,
+    check: checkIdentityCoherence,
+    stealth: identityStealth,
+    geo: identityGeo,
+    countries: IDENTITY_COUNTRIES,
+    disposableEmailDomains: DISPOSABLE_EMAIL_DOMAINS,
+  },
+  /** Account-creation flow runner (isolation, pacing, risk-score reporting). */
+  AccountRunner,
+  readRiskReport,
+  behaviouralRegularity,
   /** Global selector engines: velox.registerSelectorEngine('name', fn) */
   registerSelectorEngine,
   /** Lifecycle hooks: velox.hook('onNavigation', fn) */
@@ -124,6 +143,7 @@ export {
   WebSocketTracker, Download, liteFetch, liteFetchAll, parseHtml, needsJS, CookieJar, createCache, HttpCache, expect,
   ProxyPool, checkProxy, normalizeProxy, proxyFlags, proxyForward,
   importSession, exportSession, normalizeCookies, parseCurlCookies, parseNetscapeCookies, importHAR,
+  AccountRunner, generateIdentity, generateIdentities, checkIdentityCoherence, identityStealth, identityGeo, behaviouralRegularity, readRiskReport, IDENTITY_COUNTRIES,
   config, getConfig, use, registerDevice, registeredDevices, pluginPresets as plugins,
   middleware, registerCommand, registerSelectorEngine, hook, registeredExtensions,
   STEALTH_PROFILES, STEALTH_GEO, detectChallenge, engageChallenge, gotoChallenge, CHALLENGE_VENDORS,

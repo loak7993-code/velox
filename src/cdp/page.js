@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Emitter, sleep, withTimeout, TimeoutError, randInt, humanDelay } from '../util.js';
 import { ENGINE_SOURCE } from './inject.js';
-import { STEALTH_SOURCE, resolveStealth, buildStealthSource } from './stealth.js';
+import { STEALTH_SOURCE, resolveStealth, buildStealthSource, alignVersion } from './stealth.js';
 import { DEVICES } from './devices.js';
 import { buildHar } from './har.js';
 import { Locator, byRoleSel, byTextSel, byLabelSel, byPlaceholderSel, byAltTextSel, byTitleSel, byTestIdSel } from './locator.js';
@@ -130,7 +130,7 @@ export class VeloxPage extends Emitter {
     this._bw = resolveBandwidth(opts.bandwidth);
     // a coherent stealth profile drives landing UA, Client Hints, locale, timezone and
     // Accept-Language together — detectors score contradictions between these
-    this._stealth = resolveStealth(opts.stealth);
+    this._stealth = alignVersion(resolveStealth(opts.stealth), this.browser?.versionInfo?.product);
     this._bytesBlocked = 0; this._blockedByType = {};
     // single pipelined batch — all domain enables fly at once
     const jobs = [

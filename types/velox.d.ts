@@ -118,6 +118,53 @@ declare module 'velox' {
   }
   export interface CookieImportResult { cookies: CookieEntry[]; skipped: { cookie: any; why: string }[]; dropped: number; }
 
+  export interface Identity {
+    id: string; country: string; countryName: string;
+    locale: string; timezone: string; languages: string[];
+    firstName: string; lastName: string; fullName: string; username: string;
+    email: string; emailLocal: string; emailDomain: string;
+    phone: string; phoneCountry: string;
+    address: { line1: string; city: string; region: string; postalCode: string; country: string; countryCode: string };
+    dob: string; age: number; password: string;
+    device: { profile: string; width: number; height: number; dsf: number; seed: number };
+    coherence: { ok: boolean; issues: { field: string; why: string }[] };
+  }
+  export interface RiskReport {
+    score: number | null; reasons: string[]; status: number | null;
+    markers: string[]; url: string | null; ok: boolean | null; verificationRequired: boolean | null;
+  }
+  export interface AccountRecord {
+    index: number; identity: Identity; url: string; ok: boolean;
+    steps: { step: string; ok: boolean; ms: number; error?: string }[];
+    risk: RiskReport; signals: any[]; error: string | null;
+    cookies: string[]; localStorageKeys: string[]; ua: string | null;
+    proxy: string | null; fingerprintSeed: number | null; ms: number;
+    extracted: Record<string, any>;
+  }
+  export interface AccountPlanStep {
+    goto?: string; fill?: string; type?: string; value?: any; click?: string; humanClick?: string;
+    check?: string; select?: string; press?: string; scroll?: number;
+    waitFor?: string; waitForText?: string; waitForCaptchaToken?: string; waitForResponse?: any; waitMs?: number;
+    extract?: string; as?: string; assert?: (ctx: any) => any; call?: (ctx: any) => any;
+    optional?: boolean; timeout?: number; cps?: number; name?: string;
+  }
+  export interface AccountPlan {
+    url?: string; identity?: Identity | Record<string, any>; steps: AccountPlanStep[];
+    expect?: { selector?: string; text?: string; check?: (ctx: any) => any };
+    warmup?: boolean | { mouse?: number; scroll?: number; dwellMs?: number };
+    waitUntil?: string; timeout?: number; proxy?: any;
+  }
+
+  export class AccountRunner {
+    constructor(opts?: { browser?: Browser; launch?: LaunchOptions; pool?: ProxyPool; contextOpts?: PageOptions; paceMs?: [number, number]; maxPerHour?: number; keepPages?: boolean; onEvent?: (event: string, payload: any) => void });
+    register(plan: AccountPlan, opts?: { index?: number; proxy?: any }): Promise<AccountRecord>;
+    farm(plan: AccountPlan, opts?: { count?: number; concurrency?: number; identities?: Identity[]; pace?: [number, number] }): Promise<AccountRecord[]>;
+    verifyIsolation(records?: AccountRecord[]): { ok: boolean; issues: any[]; notes: any[]; accounts: number };
+    summary(records?: AccountRecord[]): any[];
+    readonly records: AccountRecord[];
+    close(): Promise<void>;
+  }
+
   export interface CookieEntry { name: string; value: string; domain?: string; path?: string; expires?: number; httpOnly?: boolean; secure?: boolean; sameSite?: string; url?: string; }
 
   export interface RequestEntry {
@@ -668,6 +715,19 @@ declare module 'velox' {
     challenge: { detect: any; engage: any; goto: any; vendors: Record<string, any> };
     /** Pre-launch browsers (and optionally pages) so launch()/open() are instant. */
     prewarm(opts?: LaunchOptions & { browsers?: number; pagesPerBrowser?: number }): Promise<Browser[]>;
+    /** Coherent synthetic identities for onboarding/fraud-control testing. */
+    identity: {
+      generate(opts?: { country?: string; seed?: number; emailDomain?: string; realistic?: boolean; emailStyle?: 'name' | 'nameNum' | 'initial' | 'flanked'; minAge?: number; maxAge?: number; password?: string }): Identity;
+      generateMany(count: number, opts?: any): Identity[];
+      check(id: Identity): { ok: boolean; issues: { field: string; why: string }[] };
+      stealth(id: Identity, extra?: any): any;
+      geo(id: Identity): { country: string; locale: string; timezone: string; languages: string[] };
+      countries: Record<string, any>;
+      disposableEmailDomains: string[];
+    };
+    AccountRunner: typeof AccountRunner;
+    readRiskReport(page: VeloxPage, o?: { urlFilter?: RegExp; maxBodies?: number }): Promise<RiskReport>;
+    behaviouralRegularity(page: VeloxPage): Promise<{ score: number | null; measurements?: any; reason?: string }>;
     /** Local forwarder for an authenticated upstream proxy (reliable where CDP proxy auth fails). */
     proxyForward(upstream: any, o?: { host?: string; port?: number; auth?: { username: string; password: string } }): Promise<{ server: string; port: number; direct: boolean; stats: any; close(): Promise<void> }>;
     /** Import a session (cookies array, curl header or HAR) — applies to the next page/context. */

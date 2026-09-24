@@ -93,21 +93,50 @@ export function resolveStealth(opt) {
   if (!profile) throw new Error(`unknown stealth profile "${o.profile}" — try: ${Object.keys(PROFILES).join(', ')}`);
   const geo = o.geo ? GEO[o.geo] : null;
   if (o.geo && !geo) throw new Error(`unknown geo "${o.geo}" — try: ${Object.keys(GEO).join(', ')}`);
+  // explicit locale/languages/timezone always win (e.g. an identity that says ja-JP), then
+  // a geo preset, then the profile — and locale/languages are kept in sync so
+  // navigator.language, the emulated locale and Accept-Language can never disagree
+  const explicitLangs = o.languages && o.languages.length ? o.languages : null;
+  const locale = o.locale || geo?.locale || explicitLangs?.[0] || (o.geo ? o.geo : profile.locale);
+  const languages = explicitLangs
+    || (o.geo ? [o.geo, o.geo.split('-')[0], 'en'] : [locale, locale.split('-')[0], ...profile.languages.filter((l) => !l.startsWith(locale.split('-')[0]))].slice(0, 3));
   return {
     profile: o.profile || 'chrome-linux',
     values: profile,
     userAgent: o.userAgent || profile.userAgent,
     userAgentMetadata: profile.userAgentMetadata,
-    locale: o.locale || geo?.locale || (o.geo ? o.geo : profile.locale),
+    locale,
     timezone: o.timezone || geo?.tz || profile.timezone,
-    acceptLanguage: o.acceptLanguage || geo?.acceptLanguage,
-    languages: o.geo ? [o.geo, (o.geo.split('-')[0]), 'en'] : profile.languages,
+    acceptLanguage: o.acceptLanguage || geo?.acceptLanguage || languages.join(','),
+    languages,
     noise: o.noise !== false,
     seed: Number.isFinite(o.seed) ? o.seed : 1337,
     webrtc: o.webrtc ?? 'default',          // 'default' | 'block'
     mediaDevices: o.mediaDevices !== false,
     hideEngine: o.hideEngine !== false,
   };
+}
+
+/**
+ * Align the profile's claimed Chrome version with the real binary. Claiming 128 while
+ * the browser is 154 is a contradiction detectors (creepjs, pixelscan) pick up.
+ */
+export function alignVersion(resolved, version) {
+  if (!resolved) return resolved;              // stealth off → stay off
+  if (!version) return resolved;
+  const full = String(version).replace(/^.*\//, '').trim();
+  const major = full.split('.')[0];
+  if (!/^\d+$/.test(major)) return resolved;
+  const out = { ...resolved, chromeVersion: { full, major } };
+  if (out.userAgent) out.userAgent = out.userAgent.replace(/Chrome\/[\d.]+/, `Chrome/${full}`);
+  if (out.userAgentMetadata) {
+    out.userAgentMetadata = {
+      ...out.userAgentMetadata,
+      fullVersion: full,
+      brands: (out.userAgentMetadata.brands || []).map((b) => /Chromium|Google Chrome/.test(b.brand) ? { ...b, version: major } : b),
+    };
+  }
+  return out;
 }
 
 /**
@@ -136,6 +165,20 @@ export function buildStealthSource(resolved) {
     try { Object.defineProperty(obj, prop, { get: typeof value === 'function' && value.__getter ? value.fn : function () { return value; }, configurable: true, enumerable: !!enumerable }); } catch (e) {}
   };
   var getter = function (fn) { var f = function () { return fn(); }; f.__getter = true; f.fn = fn; return f; };
+  var navProto = (function () { try { return Object.getPrototypeOf(navigator); } catch (e) { return null; } })();
+  // patch where the property actually lives (usually the prototype) so the descriptor
+  // shape matches a clean browser instead of appearing as an own property
+  var defNav = function (prop, value, enumerable) {
+    // mount on the prototype wherever possible: a real browser exposes these there, and an
+    // own property on the instance is exactly what "WebDriver (New)" style checks look for
+    var target = navProto || navigator;
+    try {
+      Object.defineProperty(target, prop, {
+        get: (value && value.__getter) ? value.fn : function () { return value; },
+        configurable: true, enumerable: !!enumerable,
+      });
+    } catch (e) { try { navigator[prop] = value; } catch (e2) {} }
+  };
 
   // ── native-looking functions ───────────────────────────────────────────────
   // patched builtins must still report [native code] or the patch itself is the tell
@@ -176,16 +219,15 @@ export function buildStealthSource(resolved) {
   };
 
   // ── 1. navigator core ─────────────────────────────────────────────────────
-  def(navigator, 'webdriver', undefined);
-  def(navigator, 'platform', R.platform);
-  def(navigator, 'vendor', ${JSON.stringify(v.vendor)});
-  def(navigator, 'language', R.languages[0]);
-  def(navigator, 'languages', R.languages.slice());
-  def(navigator, 'hardwareConcurrency', R.hardwareConcurrency);
-  try { def(navigator, 'deviceMemory', R.deviceMemory); } catch (e) {}
-  def(navigator, 'maxTouchPoints', R.maxTouchPoints);
-  try { def(navigator, 'oscpu', undefined); } catch (e) {}
-  try { def(navigator, 'doNotTrack', null); } catch (e) {}
+  defNav('webdriver', undefined);
+  defNav('platform', R.platform);
+  defNav('vendor', ${JSON.stringify(v.vendor)});
+  defNav('language', R.languages[0]);
+  defNav('languages', R.languages.slice());
+  defNav('hardwareConcurrency', R.hardwareConcurrency);
+  try { defNav('deviceMemory', R.deviceMemory); } catch (e) {}
+  defNav('maxTouchPoints', R.maxTouchPoints);
+  try { defNav('doNotTrack', null); } catch (e) {}
 
   // ── 2. plugins / mimeTypes with a correct prototype chain ─────────────────
   try {
@@ -210,7 +252,7 @@ export function buildStealthSource(resolved) {
     patch(arr, 'item', function (i) { return list[i] || null; }, 'item');
     patch(arr, 'namedItem', function (n) { for (var i = 0; i < list.length; i++) if (list[i].name === n) return list[i]; return null; }, 'namedItem');
     patch(arr, 'refresh', function () {}, 'refresh');
-    def(navigator, 'plugins', arr);
+    defNav('plugins', arr);
     var marr = Object.create(MimeTypeArray.prototype);
     var mt = mime('application/pdf', 'pdf', 'Portable Document Format');
     def(mt, 'enabledPlugin', list[0]);
@@ -218,7 +260,7 @@ export function buildStealthSource(resolved) {
     def(marr, 'length', 1);
     patch(marr, 'item', function (i) { return i === 0 ? mt : null; }, 'item');
     patch(marr, 'namedItem', function (n) { return n === 'application/pdf' ? mt : null; }, 'namedItem');
-    def(navigator, 'mimeTypes', marr);
+    defNav('mimeTypes', marr);
   } catch (e) {}
 
   // ── 3. window.chrome (present on every real Chrome page) ──────────────────
@@ -448,18 +490,31 @@ export function buildStealthSource(resolved) {
         }, 'getHighEntropyValues'),
         toJSON: markNative(function () { return { brands: md.brands.slice(), mobile: !!md.mobile, platform: md.platform }; }, 'toJSON'),
       };
-      def(navigator, 'userAgentData', uad);
+      defNav('userAgentData', uad);
     }
   } catch (e) {}
 
   // ── 11. misc surfaces detectors read ─────────────────────────────────────
-  try { def(navigator, 'connection', { effectiveType: '4g', rtt: 50, downlink: 10.5, saveData: false, onchange: null }); } catch (e) {}
+  try { defNav('connection', { effectiveType: '4g', rtt: 50, downlink: 10.5, saveData: false, onchange: null }); } catch (e) {}
   try {
     navigator.getBattery = markNative(function () { return Promise.resolve({ charging: true, chargingTime: 0, dischargingTime: Infinity, level: 1, onchargingchange: null, onchargingtimechange: null, ondischargingtimechange: null, onlevelchange: null }); }, 'getBattery');
   } catch (e) {}
-  try { def(navigator, 'pdfViewerEnabled', true); } catch (e) {}
-  try { if (R.mobile === false) def(navigator, 'standalone', undefined); } catch (e) {}
+  try { defNav('pdfViewerEnabled', true); } catch (e) {}
   try { def(screen, 'isExtended', false); } catch (e) {}
+
+  // ── 11b. descriptor hygiene: nothing of ours may appear as an own property ─
+  try {
+    Object.defineProperty(window, '__vlxDescriptorClean', {
+      value: function () {
+        var own = Object.getOwnPropertyNames(navigator);
+        var dirty = own.filter(function (k) {
+          return ['webdriver','platform','vendor','language','languages','hardwareConcurrency','deviceMemory','maxTouchPoints','plugins','mimeTypes','userAgentData','connection','pdfViewerEnabled','oscpu','doNotTrack','standalone'].indexOf(k) !== -1;
+        });
+        return dirty;
+      },
+      enumerable: false, configurable: true,
+    });
+  } catch (e) {}
 
   // ── 12. hide our own engine surface from casual enumeration ───────────────
   ${r.hideEngine ? String.raw`

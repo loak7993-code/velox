@@ -1,0 +1,2242 @@
+[
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/cp/signup",
+    "type": "Document",
+    "status": 200,
+    "failed": null,
+    "ms": 772.154
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/fonts/Gibson-Regular.woff?md5=17392-bea94968&hver=2",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 357.107
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/fonts/Gibson-Book.woff?md5=17248-2d98b5ec&hver=2",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 406.003
+  },
+  {
+    "method": "GET",
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.min.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 1034.099
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/css/flags.css?md5=79537-83d6f5f2&hver=2",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 120.217
+  },
+  {
+    "method": "GET",
+    "url": "https://js.userpilot.io/sdk/latest.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 779.388
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/jquery.min.js?md5=87533-2c872dbe&hver=2",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 389.999
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/billing-api/confs/customers_lib.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 245.356
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/billing-api/confs/billing_schemas.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 382.664
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/billing-api/confs/billing_pay_conf.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 395.221
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/billing-api/confs/billing_pricing_conf.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 402.633
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/billing-api/confs/billing_pricing_conf_lw.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 377.574
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/util/hubspot_lp.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 361.407
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googleadservices.com/pagead/conversion_async.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1141.036
+  },
+  {
+    "method": "GET",
+    "url": "https://bwa.marketplace.awsstatic.com/assets/partner.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1460.784
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/mixpanel/lib.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1672.922
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widget.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 976.831
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtm.js?id=GTM-MHTFV8F",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 979.01
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/root.js?r=1.671.60",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1152.586
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/cdn-cgi/challenge-platform/h/b/scripts/precursor/d76008a69eab/main.js?",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 576.546
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/2026-09-01-10-22-26/widget_app_base_1788258146788.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 3833.976
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=AW-879571748&cx=c&gtm=4e69m0",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1105.144
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=G-KQX3XWKR2T&cx=c&gtm=4e69m0",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1086.894
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/web_api/report_csp",
+    "type": "Other",
+    "status": 200,
+    "failed": null,
+    "ms": 2462.843
+  },
+  {
+    "method": "GET",
+    "url": "https://eulady.thesmilingelbows.com/sxp/i/1923d44bc65deb42d6f5d7101a246f6b.js",
+    "type": "Script",
+    "status": null,
+    "failed": "csp",
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://snap.licdn.com/li.lms-analytics/insight.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1169.943
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-scripts.com/7697697.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1293.887
+  },
+  {
+    "method": "GET",
+    "url": "https://www.clarity.ms/tag/ct7q3t3lfz",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1257.933
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=19&frm=0&apvc=1&ae=g&auid=1454698646.1790192142&dt=Bright%20Data%20-%20Web%20Data%20Platform&en=page_view&dl=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=944421807.1790192142&navt=n&npa=0&ep.ads_data_redaction=0&gtm=45He69m0v831403075za200zd831403075xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120385423~120469145~120469153~121280971&tft=1790192141893&tfd=3264&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 1680.679
+  },
+  {
+    "method": "POST",
+    "url": "https://ad.doubleclick.net/ccm/s/collect?auid=1454698646.1790192142&gtm=45He69m0v831403075za200zd831403075xeaxf1&fmt=8",
+    "type": "Fetch",
+    "status": 204,
+    "failed": "net::ERR_ABORTED",
+    "ms": 702.941
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/4121.18860af25e6b62a9bb58.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 1340.396
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/4121.c4673c6d1badfd402c38.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2135.333
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/6109.cc3dbdd0a574074c924c.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 1467.947
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/6109.363622cdf9210a1c051e.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 451.009
+  },
+  {
+    "method": "GET",
+    "url": "https://snap.licdn.com/li.lms-analytics/insight.beta.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 208.697
+  },
+  {
+    "method": "GET",
+    "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/879571748/?random=1790192143245&cv=11&fst=1790192143245&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be69m0v889560231za20ozb831403075zd831403075xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=4",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 687.785
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/rmkt/collect/879571748/?random=1790192143245&cv=11&fst=1790192143245&fmt=8&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be69m0v889560231za20ozb831403075zd831403075xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&data=event%3Dgtag.config&ept=68&gcp=5",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 449.425
+  },
+  {
+    "method": "GET",
+    "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/879571748/?random=1790192143282&cv=11&fst=1790192143282&bg=ffffff&guid=ON&async=1&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&_tu=CA&ept=9&rfmt=3&fmt=4",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 809.668
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/rmkt/collect/879571748/?random=1790192143282&cv=11&fst=1790192143282&fmt=8&bg=ffffff&guid=ON&async=1&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&_tu=CA&ept=68&gcp=5",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 572.879
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=0&frm=0&apvc=0&auid=1454698646.1790192142&dt=Bright%20Data%20-%20Web%20Data%20Platform&tid=AW-879571748&en=page_view&dl=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=944421807.1790192142&navt=n&npa=0&gtm=45be69m0v889560231za20ozb831403075zd831403075xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&tft=1790192143288&tfd=4658&tids=AW-879571748&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 566.508
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=0&frm=0&apvc=0&ae=g&auid=1454698646.1790192142&dt=Bright%20Data%20-%20Web%20Data%20Platform&tid=AW-879571748&dl=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=944421807.1790192142&navt=n&npa=0&_tu=CA&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&tft=1790192143289&tfd=4659&tids=AW-879571748&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 567.869
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hsadspixel.net/pixels.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2417.235
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-banner.com/v2/7697697/banner.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1136.555
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-analytics.net/analytics/1790192100000/7697697.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1173.613
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/cdn-cgi/challenge-platform/h/b/precursor/d76008a69eab/0.8538382937316252:1790190031:amXC4B3AfwISylT2JrmDtn9vCYPUGDLTUh5GXkIBDcs/a3fbfe65a9e323ef",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 980.129
+  },
+  {
+    "method": "POST",
+    "url": "https://analytics.google.com/g/collect?v=2&tid=G-KQX3XWKR2T&gtm=45je69m0v881225149za20ozb831403075zd831403075xf1&_p=1790192140220&_gaz=1&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AAAAAGAC&cid=1183240516.1790192143&frm=0&pscdl=noapi&rcb=1&sr=1920x1080&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uam=&uamb=0&uap=Linux&uapv=6.6.0&uaw=0&ul=en-us&gaf=2&_s=1&tag_exp=115938466~115938469~118897920~118897930~120213116~120385422~120469145~120469153~121280971&sid=1790192143&sct=1&seg=0&dl=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&dt=Bright%20Data%20-%20Web%20Data%20Platform&en=page_view&_fv=1&_nsi=1&_ss=1&ep.content_group=CP&tfd=4837",
+    "type": "Fetch",
+    "status": 204,
+    "failed": "net::ERR_ABORTED",
+    "ms": 539.855
+  },
+  {
+    "method": "POST",
+    "url": "https://stats.g.doubleclick.net/g/collect?v=2&tid=G-KQX3XWKR2T&cid=1183240516.1790192143&gtm=45je69m0v881225149za20ozb831403075zd831403075xf1&rcb=1&aip=1&dma=0&gcd=13l3l3l3l1l1&npa=0&frm=0&tag_exp=115938466~115938469~118897920~118897930~120213116~120385422~120469145~120469153~121280971",
+    "type": "Ping",
+    "status": 204,
+    "failed": null,
+    "ms": 2292.729
+  },
+  {
+    "method": "POST",
+    "url": "https://px.ads.linkedin.com/wa/?medium=fetch&fmt=g",
+    "type": "Fetch",
+    "status": null,
+    "failed": "net::ERR_TUNNEL_CONNECTION_FAILED",
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://px.ads.linkedin.com/collect?v=2&fmt=js&pid=50800&time=1790192144683&li_adsId=4774b593-dd0f-477d-b018-acabdd4417d7&pageLoadId=a6e6fdfb-8356-42a9-870a-e172cc9f488d&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&tm=gtmv2",
+    "type": "Image",
+    "status": null,
+    "failed": "net::ERR_TUNNEL_CONNECTION_FAILED",
+    "ms": null
+  },
+  {
+    "method": "POST",
+    "url": "https://px.ads.linkedin.com/wa/?medium=beacon&fmt=g",
+    "type": "Ping",
+    "status": null,
+    "failed": "net::ERR_TUNNEL_CONNECTION_FAILED",
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://px.ads.linkedin.com/insight_tag_errors.gif?v=2&pid=50800&error=version%3A%201000026%20%7C%20WebsiteActions-1000026-TypeError%3A%20Failed%20to%20fetch%3B%20ErrorData%3A%20%7B%22domain%22%3A%22brightdata.com%22%2C%22requestFetcher%22%3A%22fetch-keepalive%22%2C%22body%22%3A%22H4sIAAAAAAAAA1VQy2rcMBT9leGupYxsy7KkXUqbYMgidIZ0UUq5enhGRJYVS0MpIf9ePFMK3d3D5TzfIQdXQH%2FvmWTsB4Fi15Dri19LWBLohjHGWkGghtmDbgbFGtU2nIthIOCWGUMCDWYNp3N1WPHOLjMQuKwRNJxrzUXv9%2F%2B%2F9zbvSzilSwYCv7wpofpDOCWMX%2F3bxZc6OtDQczEht4YaO1nKJzS06ayiomst65TreyGAQMaTf1rQXTkovJjcZKjsekF5i4rKgSH1zdBaqyYupQMCoRxXTCVi9Q70hLF4AjE84M0ZNvAYMNUbmEOxoN8hF3OoWD1oyj82laeQXr0b033O%2F2S2PMdQowcNn661d5%2Bx4o7uvnlzO58j1mlZt5nOfgadLjESKNcFjr%2Fzxny%2Bf%2Fzy82U8jMe%2FFcdUKibrrwEl50pZlFQa1VMjpKGyEYIy4bnqpW1ZN8HHHwARE5HbAQAA%22%7D&href=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup",
+    "type": "Image",
+    "status": null,
+    "failed": "net::ERR_TUNNEL_CONNECTION_FAILED",
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com/pagead/1p-user-list/879571748/?random=1790192143245&cv=11&fst=1790190000000&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be69m0v889560231za20ozb831403075zd831403075xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=3&is_vtc=1&cid=CAQS0wEAQM4h3Nfxi_cAegfUyzt54J6HD6ER9Un56_Y1uFy1mAt9UAPKf_3dKuKj_XBpuBmYSGme58joAg5fwOxiPJmqEZV-RucUjyqCdFFvDytVF0umOX8ua5LVkksrDS8aoJsaznhvUW0Roq55F3cYiB5_W0jxEd8yqA9z8Sgc_i2rAewQCyWpWTORSz0qbEB4ou08aYWoPpnGs9k-eJrmuD1PNzKwECZCHl3wfrIPIxP4HuL9jgMcMoG_4FynnTqVDu3c0AWhJs4EANc1B9gg1VfY1sZ5&random=2946982919&rmt_tld=0&ipr=y",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 456.278
+  },
+  {
+    "method": "GET",
+    "url": "https://www.google.com/pagead/1p-user-list/879571748/?random=1790192143282&cv=11&fst=1790190000000&bg=ffffff&guid=ON&async=1&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~117776796~118897920~118897930~120213116~120385422~120469145~120469153~121280971&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=0&frm=0&tiba=Bright%20Data%20-%20Web%20Data%20Platform&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&_tu=CA&ept=9&rfmt=3&fmt=3&is_vtc=1&cid=CAQS0wEAQM4h3ChOqC-xsngSp7icGI2LC7PeUgcVmCDe-G6xQnspAQ_zU45ikHbH928NJ5YZoPJpkVcMdzPS7a7F_U8Xteam40UQFZSlWibtT52J4fYwFmcTVdNdoQCiF7jxTldcUUXGzM-58C3Jvbc9mD6D4XeX-Nv8oDR14qhUE6NbGmFfxlBI8DPTIhc2PKgl1G-YOZ6sDx1sfRBuKm6xqXiMnvmXT9H6hq7x0cFdRn1L3ON1t7CzMV-wZgwIrxnipXPG-HElRNHrLmGq5GimZqNfNhua&random=2390400492&rmt_tld=0&ipr=y",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 463.382
+  },
+  {
+    "method": "GET",
+    "url": "https://scripts.clarity.ms/0.8.70/clarity.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 458.458
+  },
+  {
+    "method": "POST",
+    "url": "https://api.userway.org/api/v1/tunings/5QpdnMuu2L",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 771.216
+  },
+  {
+    "method": "POST",
+    "url": "https://k.clarity.ms/collect",
+    "type": "XHR",
+    "status": 204,
+    "failed": null,
+    "ms": 2274.158
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/2026-09-01-10-22-26/locales/en-US.json",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 924.544
+  },
+  {
+    "method": "GET",
+    "url": "https://api.hubapi.com/hs-script-loader-public/v2/config/pixels-and-events/json?portalId=7697697",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 1044.9
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/2026-09-01-10-22-26/remediation/remediation_1788258146788.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 928.031
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/styles/2026-09-01-10-22-26/widget_base.css?v=1788258146788",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 284.831
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/images/body_wh.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 285.832
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/images/spin_wh.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 287.616
+  },
+  {
+    "method": "POST",
+    "url": "https://k.clarity.ms/collect",
+    "type": "XHR",
+    "status": 204,
+    "failed": null,
+    "ms": 1524.66
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=AW-879571748",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 139.096
+  },
+  {
+    "method": "POST",
+    "url": "https://analytics.google.com/g/collect?v=2&tid=G-KQX3XWKR2T&gtm=45je69m0v881225149za20gzb831403075zd831403075xf1&_p=1790192140220&gcd=13l3l3l3l1l1&npa=0&dma=0&_eu=AEAAAGQC&ae=a&cid=1183240516.1790192143&frm=0&pscdl=noapi&rcb=1&sr=1920x1080&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uam=&uamb=0&uap=Linux&uapv=6.6.0&uaw=0&ul=en-us&gaf=2&_s=2&tag_exp=115938466~115938469~118897920~118897930~120213116~120385422~120469145~120469153~121280971&sid=1790192143&sct=1&seg=0&dl=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&dt=Bright%20Data%20-%20Web%20Data%20Platform&en=scroll&ep.content_group=CP&epn.percent_scrolled=90&_et=19&tfd=9859",
+    "type": "Fetch",
+    "status": 204,
+    "failed": "net::ERR_ABORTED",
+    "ms": 4109.633
+  },
+  {
+    "method": "POST",
+    "url": "https://k.clarity.ms/collect",
+    "type": "XHR",
+    "status": 204,
+    "failed": null,
+    "ms": 210.561
+  },
+  {
+    "method": "GET",
+    "url": "https://api.userway.org/api/a11y-data/v0/page/https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup/DESKTOP/WIDGET_OFF/status",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 151.642
+  },
+  {
+    "method": "GET",
+    "url": "https://www.youtube.com/iframe_api",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1095.681
+  },
+  {
+    "method": "GET",
+    "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAyAAAAPgCAMAAAD9RujuAAABgFBMVEVHcEwAJH0AJH0AJH0AJH0AGnwAH30AF30AJH0AJH0AHn0AIX0AIH0AIH0AGnwAJH0AIH0AJH0AJH0AIn0AIn0AIn0AHX0AHn0AJH0AIH0AJH0AJH0AIn0AI30AIn0AI30AJH0AJH0AJH0AI30AJH0AIX0AH30AIn0AJH0AI30AJH0AIn0AIX0AI30AJH0AJH0AI30AHHwAJH0AI30AIH0AJH0AJH0AI30AI30AI30AJH0AIn0AI30AI30AI30AIn0AI30AIn0AIn0AI30AI30AIn0AIn0AI30AIX0AJH0AI30AI30AIH0AI30AI30AIX0AI30AI30AIn0AIn0AI30AJH0AI30AI30AI30AI30AI30AI30AJH0AIn0AI30AI30AI30AI30AI30AI30AIn0AJH0AIn0AI30AIn0AIX0AI30AI30AIn0AI30AI30AI30AI30AIn0AI30AJH0AI30AI30AI30AIn0AJH0AI30AI30AI30AI30AI30AI30AJH16ZAwuAAAAf3RSTlMA/fzx9wIKAfr+BBIQCwPpDuX7ORoXCQb0B8zJTr8qgufw62XyHAgk+H/fPiKR1vVTBeJyE93tx6Fo4zukxLUyqUVCi1EwKG0g29i3FXq8HoWcSyZh0la9joc0n88uq9OnulqYSewsskAYXq5HdJWwWDZq2nx2eW/UiVxjwppzzqXx6AAAIABJREFUeNrs3WlbFNcWBlBBxG4Q6AYURMYIKDIKiiCTOBEVHEAUIxgFFRUV442zpv/6jUm8N4mCDN1QXbXWN/jY9e6n6px9hh07AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACJtd3HxvvzP9iX2fFH0xz/yC4qL/T5ETEHB/kTh+OOpgYHJ9+/7x17X3Wq/3Xfns8VLf7m3/PnPwdvPb1193dP/5H3XwMBc+d5jiaKKAhVDON8TR/fl/zh3uvpJf3v7teWh2Yv1vb2NeXmx0ng8J7WieE48N5aXV9nbW5J8e2BxeWFm4nrX6MihRH7Fbr8poaiMY1fOlU2+afk0/PFC94PGWGlqU2Kxzt7kkembfXWv5lvPte0t8AuTnZoLr8ydPVh3+9LP3SWHUxnQ2dvdUXX33cv5kbbxIr83WaNovO3p75VxeTqZF09lXDxW0vFx8d1Y9dzjxC4/PkFWkSgfvV53Z+h4Yyy1xUrzfjiweKa/+sfCZs+B4CnYUzs5trB4seFwahvFGo+c6JvoOjde4YkQGIW1T998qjqyMycVDJ3d03dfV5/ba06Y7ZbfNNI/8/F4ZSpw8k4eGJyobkt4RmyTxJWnb5ZmS0pTwdXQMdxSXVto8M7W2lV06EXL8HRlkIvjyyxXZ/Ly84MjCR0Ttmquqm2ybqmjM5VFYvX3Zl78oltCxpWPvhrsaExlocPJxV/Pthm4kzFFc/PtVQ2pLNb5dvBZ2TFPkrQrKD/dM9xdmsp68ZKb7dVtuomk0f7y6t9fHbmpsOjsGPwwkvBcScuHVe31vqrGVMjEji/1tBZaNM/mJEZ+WzySmwqnkktXW/d6xmxU80/PhpPxVJj1fqx7NO5Js4Fxxy89p5I5qfDrHap7tMfzZn1zVl3XkrmpiIgn7/U8NK/FWjVNtldVpiIl3j04P2U1CmuYtHrUEr45qzUt/714bdKQnVXtPj+2VJ+KrMMfJ8oSUsAKxiff/Sc3FWnx5PL1K/tFga9UPOwZakiRypt+XmbdL/907Ont47mK4y/J5fkmmeCLo4c+1Hh5/HM0Mjsx4jXCZ/vLzlyMKYmv1Pfd12Pn8Ytr9XHV8E2NNz9M2c4eZbuaXl7uVAirfWm1PNQ+jKzzLbO+rb7n+IKVWpHUXNZ+wbzVmlYz3rlhl27UFI0OnhT9NbdGLs8/lpkISYze7RX7dZXIiZflBiMRsadr8YHIr3u8fuJ1kymtSJRHTaO4b7B5WOtYrZAbP3hTeWy8RDpazvvQCvPbY/5mpZhvRmz2de1RQQrp0Lxr2Ntj8yVS9fqKLIXQvvvDO8U7LR9a0/3l8hS28jCxm84SGerXOgxVebQqj3S3Dt8rkbAoLltIinTaS2S4Ol+2wqDp1UVxzoSGhQFtkewvj7EqK3YzpftqrYRltaL7NaVynEEdb6xizF7NA33G5pkeitw7a7tIdtr940yJAGde5Z3TFdKWfQpfztoPtTWOXG1zE0+WqRhdypPcrZJ7Yiwhc9mkrd3gY2t763cG3J+QNY69PCCyWz7l+65N8rJCcdnwYXndejlVL7TWs8DUxBFh3ab5rL4ym3KD3hl84air7ewb9riCJ9ivjwV7PrZ3sD5sfVaAXx/z0yK63U5OeIkE9fVxzR0GQWiKXJ404xtAze+rnNIeDA/OWOQbOOcXvD4CI37AZqpg2fdkViyDZOcZ5zoESO2C466C9hIZGtUTCczklddHACVfmc4KyOjDcXCBFFvUEwmA1hMmrwLbExkrFNDtNf7KyqsAa7w2JaPbqWzRmQzBVtWla7ht9t8wOg+8+hZHMG6TK89tG8wCh++V2bG+DXb9NGx0nh2OH/SZteXy3xidZ43eGVeKbLG2doeWZJEcn1lb+3k1UpMjddkkfuG9m9u2zNEPHSKXbR7ccorvFtlTZ2V7Nn5m3bVLZEvMDWoOZqcD963NyriK05qD2ds07LGPKsOKxrrlLHtVPjcQyajCdkvbs1ru8JwUZ865JafCZbvZLjsNM2R3qzOpQ6BkzH07GdF83eKSUGh41yTN6Zf41drdkIidclNC2j1u75SssIjXjEh0eh0aduFgmEw/LRDqNDpdI1Ph0v3B4sW0KZ48LlFh0ztRJNnpUfDkpDyFT+fMuGynpXv+yvRVKOWeOi/dm7f3uemrkMqpeSjfm9XUZ/oqvE60Svhmp3cdXRJmb0ftVd+Mc/fUR8ine61d3LhdrVUSFHbJlw7N2mh9VDubIQJKntlmuLH66LooPVFQ2aJCNlIfL5KyEw2dZ5xvvW77D6qPyChdUCHrrY/fnH0VIbEFV1Gtsz52Sk20KsQ7RH2wSoXcdSDQ2uujx/dV5OQO2qmuPlhZfLlc9o3PWblCllTIWurjmfFHZN8hvrKMz1nFsqvavqPZ+CPa7xAVYnzOKhVySj9k1fGH+oh6P0THcLX6cLmBClEhKynoMT4nFfvkOKBv2jVfIh1YubiC4nnr2/mzQur2qYev6qOrXjL4U16LCvm3MvvP+Z9G1+H+y08ud+ZvfvjgNKC/mzohE/xd8oaq+L9Dl5wPxz9dOK0uvnh8Rx74t44ylfGnvbdzxIGvDM2pjT8WmNzKEwa+4d6U6tixo+BlpSjwLbmDlmXt2HGjRBL4ttJ3kb/HcPd993OyoryeiogXyMOfpYCVNRyMeAOkRgOE1RyJdDtkz6AEsLqqkejWR2ImJgB8x+W2yE7wvtEA4fvuRnUq66wJXtYg9ms0bzEse+vZs7aprIIorlCs8eRZm+RoBCewPlmhyJqnsh5GrT7yr5rAYu2idvD77idWKLIOOTP7I1UgjxzRwLpU9kdpk/rUR0+c9el+Gp36KLqd64Gz3oH6+ajUR0WPDjrrt7w3IgVy/wcPm/WLXY1Gv/CcM7DYkIZInJW1Z8mTZmOmI7D0vfnqYQ+ajckZDv/VITdcksPGhyF1YT/Ues4h1fyXvTPhaippwvAlBBJCdhJISBBQIIRAEnYiCfumgIRNiIIGFJBl2GQRZZy//ul3xsPxKA6Q2/feqn6fn1DV1V1VXUsBPN6zsLaPmR3oGBRCnHUY4uxEAAIKY4dx2aJl4SkUDArDlOU7KiuCAAQUjItt95RjHj1SoHCuI8jwAnArRWk3S/s4QQ8IUIXAKcfekK5paBaow8dxfvZhi6IJHajFfjk7A/mADC9QL9c7y83JmnkBrQL1eMqsAbcdDhZQlRpedb0xD1QK1KQ5x2kOkG8FGgXq8niBT11vey32SAHVnaw5PhksOFhA/UxWlstWBB++CIEAXAtMvghzGBMHRLDCw8kadkGVQAReFt+Fu3CwgCA6GPTflpzBwQKCKBuiX/g+ghosIAz6he+OPLQIxNFNvPDdstkAJQKB9NlJG8g2xjQAsU4W6YHWjkPUmACxrOwSNpCwCwoEYvHm6G4NmcEXCBBOxwnZCP0ruqSAePJU4/RWzPkBGpBYomkfwUP8oQMtCNGcZx3eguqAJtS2E7SPLqwCARrhqiAYoU8iQgdaMV9JzkAaQ1DbHTCZms0uT0s8k8lMD92wksmstTx1JcxexHF3oT5MLkIfhWb/RJnZEw/VpHOdk8nw4GLrnN/vt1fe0OWfaWyNbC+MpTpr/z7KxDsCKEn4I9PU/tMrMKfhFqxb8d6+bGp4POIrd9xFlO1N/tbt/r3o/MCaBxvsbpPqJa0hQE1p6OwXihpartPRsdjUzIOaGCz2uZPwZdvGxx48zr+y1koqQh9+DJX9hLknNNQZ3nYHC73obI7IcKpto8UMmf4czI1SitPtG9DYDc2ezOpmbNehnnxt9sHN6HRLACvtbujoJ9SH/iUBhf2L6/pq75FfyC0UGYtOd8Dd+sE7OnPkGnuhru8knved9neJvIm61pdGQ/WQ9Hd6yGy/LbnwQl3/bPXOJyNODeI93/DsNXKG3yAz4iTyVnpdNWSuDhq1W3jvfjU70CJ95UJD0kLkAZHcLzavjS40aj2OprxickD2NdsbNBpDtrulto74u2OdRsa631+FpLYR8xMKU7JsqxI/IK7p41anjsL3jQ11Syz+EIVp1oPSBozW57X9uj/ytonTDWlnkVknjf+EVLZJWlZXv5JaNIZ6/GP5Okm/EJcjhjeQEZeUmml5EzbQbnvHyegnKZNaRbNGT2Q5+iR8QIqWr2IOY+mhffu0RsbS309Gf0Ik3JZTtHw+ZURV+JdW5PtjNxn8CXH0SZdavO40bKF1V/JIurRv3NhPiGwRiDWTMnRmsTy5I5mJeGedBtZH6Wu5nKu1VKPRkybfTESurK+hoxCpHpCy5XMSXWzln6UK100G3uwp1QPSnZtSiDCzl5Eo6WvgKCQmzwPy+PUJpe14c9Fn0nwdms6MqpkqaT7RA/sLxCaVtY+vSnN7VRs1MByXpQrrY8qtkCP4fkeSQQ/WSYNeUldyvOJ12QmLQpGZlCT7KAxa1LveIoPwmwcO6K7mnjiUYhxTwJB9IZacBA9IWfyc9NrhqpENGeYFXJcbUPYydKIH/h63KbRpjEoQrAeSBpT8JP8HZHnJoZDHdrDBX1Np4ymK/yyswPy2wgJfLft0o/FmZFk2uecQ418qFSaUDNdwb1xPG01Z7gHeAvcOnTgVPixmmaezPDGDSXyMd2+OK7qrsKJ0ifmfSNZYf1UO3vtA4mM2hRuDedZuVnzRUNKOcX6xA+lti8IPe46z0kyXhkodjjLOHLrO7ApLqsKc3axqn4FE3fqc8efHQrvClcF9vn0iASONsua7E71s4ERhzNwo35b1N6WGEbM/w1XIiTafwpqqSxdX3dUZZydbOME1m95ZqTDHmQxxbXM7DBpExsE811RhWJGAxWmm6lszSmfhINNGkN6YIgWRPM8SePMTY4TptiuWP06mF+uKJPizAZYWsmGMthB/iOX1886nSEPwfIujDhsMUdNreclxcp8561AkwrbH0k2eN0KFkPuIoWSLs25FKiwHzzhmWYww+nLwKT/B9kxWKrJxsMzQD0gZIEw/55cC8Zy2S2cfiuVDNT8LqdE/TPfxE2vHnoT28c1C1lfYqfKx/pn6JLtW2+7PUtrH9w8RdhZSlNU7TC9hN9D9+bBFUWAhXMJ0vZP1j7qZSfTjiCIxi9wsxPxZ7xCdWaXbM6nt45uF1DCzkLy+Re9uZoVuHZuK5HB7QzyPdBVnRR0vae61y24gSuSalUpN53oOsi75i1WdYs8p7ENRYrwS9zV6Dmyys/JY60+rYB6KYhlmlXip17NiMcmpTNpcG4R1/N9C3rOykJx+kmya5+SsXjlgG/9y7GKk2F6/bnKcYjRXyTtvh2H8wHbKqIVBRx+L00T3aT/s4oaqC0bO86heeawgIw8rsw6r+Cn9cshnVuaaXndfKx8P61MFbOJn/G/Y1EjUL+jlYTVzEaFrDBbxy4chny/1Q33S9zY2HlbiaxMM4hc+sBm4/FGfkt4IFw/LtFoKc/gV51IPEwUXH+iTLOeSwzrywRp+m4S5YDKTXJ+2KTYe1to4bOH3sNkbVq1HPRYXD8tzAEu4jQkmu73NeuSxjhMsZBe4KIEh3EoFj3lyZTntlWxb5XG5vEaFyZ8C9RSP7cW92vtYXTy6BqonYAV/onKVRcePDvVYIyyuFs8BHKw/M8VjNLnmNe8lUQ6VCN4LG0zgPzhwcTCQaa1HLNo3OOTH0zMwgP/knENFUZ3Wu1grONwr8QiO/x3uQhYb9lJaXysMqqGL93D678IJhw7ctLYFi44dBjI7RIni3eLNFIOiom5t52PNMVgmgQzvXSnP08/INGs7EpDBTPeGY5z8uzLIwMnKObV8dA/pZ7AOMcREKidL0106DBbbrsHBuk8ma5+8wre0HEtOfy9hYs+CY38Pxsk7WUUX2knLckl+L+ERHKx74Zwk3zyV124xa9Ub6sLyjODM39PJGiD/LazdTmjyizuts6hRvC8L1DvUzWHNZPWeeiVvbyMO/H2pHCVe+K5dEGL5i/i/UfESHpD7M0X9c3jArZGkHNRDkDTG/DyETuJxeotWmf1HxBuVXYjQH0T5C+JByEutwjXis/FzWCT1MJLE43SN2gqdWdql7nH8oT+QUuJzsna0+fxy0y51907ipD+UDx7Squ/QZsfFFO2hxiGkeB/+Q9xG2nkwJzWR0kiCtJDwgBTASQfpy3FVk5L3WdK3yApWrRXyhGRJG8i+Fvn9qj7KIkosoYq3ECZIT2TuXtRARLQXr73AA1Kg/0C5kLtei0HlMcqFWAG0gRRI5C1h9Rd91UD9T4rwgEhMyRll/efFByGWNtIPCE54wVEI5d7CNfFT3h3XSGFJjW2WcNm7S/wE0m3ClYreLzjfcv+FmMW7EJSbpfCJrgZByt/pq6KjdMsZXeFYJ5HCUuUJIVyRtSF6oViQ8KjvT1M43GrQ1IczcCtddEfGmc6wLUcdDorp5jFF77sdpPu8uipwtNXBTXd7kkl0repLukNa+9CJrtpnMdnu9LJR/KPeQkMYB1stGnvpRuliuwor6TZd1mAhunr3ZC3ZwU/Pxa7dmyE7U9F0iXOtHuNkQ1FXDDH6b1lGjheexPfPsCdCBZMMkP1CxalWk02yyZpaob/FZPceCM9/S8buW6oGMi1yKprtHVWxZHw41GrirKWazvwksiCP7JKIoqgTh1pV+l1Ej8LTQYFSaaU6EqtlG0da5buS6qDewHuBUvlAtdb9DTauqYzljOpXSKfAKP0l0RIDawqF7mpTQdXHahNYs0p1ZlzLOg602gSpjmjeF7jMc56oTIYqcaBV5wvR3vS4uMENDqKBmfUJPCz1WSQ6naDulTCRzK0hhwV+4D6ieRqKxZV1rxOtxBoK4jgLYJJmysaaEiaRMZqFJt4UDrMITmjmscra2kVJ5Cs8LHBD+QrN89DXJOpvaJRoXq8Jh1kEJURnLK6UixIIzSxv2SzOshhiNH2suKhyRTvNJ7VhGEdZkI9FszW9R1RTIdHtndWodBeEjeak/4CoPO84zanFbZgXJwqafYXWU0HiGCZZy4u96OIguiukVtR9QfIbRGiDjOQEaY5YTIvpurVESUpjwI2DLAoLza3QNV1CpFFFMstbtooQRBxhktUm1WLyvE1DFIWROMYxFscjkhW93WKmK9pJbiesw0x3gVROUzwTrnEhwtgm+Q2ygRBEJDmKnenWpJhvEJLF7u+qcIoF8pliZtMkZvzocA/Fy+KyBKdYIOsUP48FVeeNUZzLK3iYt/TskizHahMiixTF4ua3czjEIqkiudAzL0QWJBdA76DbVix/Ubw2V0Rs42s/pGggV5hnIpaXCYKnIuQXkfKmuDPFu4QjLJZXFL8K4yJ+Cu0U/4S28E0omC6K38dCJm3OhAhK4tkEjrBYSvMEj0V9vwBJ+OIUozE3jrBYnBQX3haLSP4vUqw0mf8fe1ei0FSWREkI5gUCCWEPIERANkHWAKOg7IjYgqKIoI2DLIosIrgC99cb7ekZu8cVX928U++cTzh1zl3q1q2igqXxvolP6Z8wsoZHROA1BSwNyAILiZngI/WASaw9ClgakBXvh0x4f0KahSbiiFcDGuSBQIXeB8DPY9OXKGBpVCC+j7UJGGQSsLD5aIYClkbOIqBBrgv8w64B5GGDszvFEd4GnMs3JNDgHbGBBXvGWUAVYPe4pMDKCVirGDmgfOUxApjnnZ5ynYZOwLuYU0f5ymMdMM/7yv3sTRxw6m/9U8pXHrfbaZBT5AMaRKQmjfinMgDreQvdn3Q7A0hDbwPlK4+Cx3jKiLm/dDYk8Wi494zytfAQcgxokFYa5BS/RSlfCw8h7/CUcXnMdRqm3uLRsBWnfC3gDZ4yQh2us3AesK/iMbsq2sA+DYJpkAjbjlpBR5AGgTRIoKaA6rWAohQNgrmDdFO8VgySpkEgDZJgpYkVXIvhHS7maRAaxBYQ23m4L41HePvo5fsULw1iyyDjeDex1B2K1wYaaZBTPAzRIMQXUdJHg9AgxFfRM0iDQBokxs7VNAgN8g2D8DsIDUKDfB2F1yheGoQG+bpBHlG8NAgNQoPQIDQIDUKD0CA0CA1CgzDNS4PQIN4wCIcf0CA0CA1Cg9AgZys1YWNFK2At1ieDXMYzCGuxrIDVvB8xjvcfJJsGsQL+B/mI9RgcCc48xUuD2DIIv9wSX5MG3vwD/kmnQewBsKtJ4j0NcrpMnFC8VgyC9xu7qYMGOcVOJ9VrAYBDCtkX6xOOaRAbGGDr0SzM7u5LF6leC2Dz6o9AnA8yFKd6LaAZTxkC80EQDdI3Q/XKIzyKpwyBMr1iQIO0cwSbBeSsAhrE/X4e0Sd4NBROUL7yyN2gQbIwx0Bnj1C+8ihZxlNGy3n3DbILeBXroHzlcQmwFOvVJfevYoDDfoOcoGMBDwFfyKan3OehDY8G00z5yqN1DU8YyXz3eagBNMgqhxTKY6wJTxhHAuNdDyKAL4VR6lf8GeQQcOXcFShCqnMAd9IGClg8y7sDaJAlgaPFPOBO2sWHEHGUAqY3TVuO+0Q8rcfjIc1f6eIoBnwGMbNh94kYycbjIcFf6eJ4BJjlNW8EiACchm0izPOKYzhNg3zCBOCDqVnJoYKFMZDAk0XogwARz34HNMhgDxUsi4JFQFmkNgWYyKsGZEKgKI34G+KARawm9lKCCcR0XvkLSlgWJYD/hEyvxLpZNgfIhGG5ojAe1gKqYvquxGFzFNEgbbyly+J+CFAVlSUSVJwAFmOZoTJqWBSLiKpYyJeg4jlgrYm50UgNS6J0C/FcsSTCRRXgU7opZ7GJKIorIQ/eIlxcAXxKN8HuMFUsiE1EUUQORbhYRyy6Mau8hEhiH/AdXaK3+0f03EM0SCX/TEkC8TOIKe8Q4SL/JiIZsYdUseAz4RGiJgrHRci4eBWRDGeAlxA5rLcgauLtlAgZuQ8QyYisssW7HPYQU/+mUqYlbbg5AskGO1iLIQdyzTQbcRk67kMuF2vjFLIUotWQBpGaG/OiHpENZ4BClgLk05gJSP0znbgBuV48zqeSZRCedBAFEXouxEfDW0iDCOUsCNAfEKZ+WIiPiieQfIT4aUoIU79DCiIt9TRW0A/Jh5mllIWSvJch9bBcIsRHeBbTIIMl1LIEOtsw9fBErPpoPoi5pXLQlEyS9zdMg1wtFcvqpTAZOWS1iQSKMOUQOBD7hj1eCLqnnqOaBdCcgFRDok6MkZI+TIMUvqSaecL6Cym5rGbnFiYlziF7m7gPyIY/RnYmBmjawtzkY7r7uBXBFENlXI6T7QAmJxeKqGe3Ea8GXS13BW+kmPW8xgRmc6lot3NYF0ANstMpR8oj0DSWGeSnEJcRrgGVQpPkF9OGZVBWUsOUtLvoSYJKof6p5LlzCJSVyCzzWO6ioxxUCr2iEzHegbJi7t2mpt1ExRyqEpJ5krxMJkBpSexR1G6isQXVIP2iZ4nhFCov19ncxEXkbDuoQqgRLcy79AqVl3+xd4OLyFtA1UHiuSgxUdTXodOVg9d09zCyhiqDNdk349J+WIMkG6hr12SwBCsD6WxNdwCVGWefv0LcwvkuWINsCJflVdXDUnMzTmW7hANYEURGhal5iLt21HPYlEvAHCtl446elTWDe0s3c8z0uoM62Byv9B09K6sT93pmavmx0BWUPMHVwFvpiorwNi45gVGOY3MDY+W4GlgRP0W8wL2lm967VPevI/868Br5WpyexmlceoSmm/oMLy7gKiC0J79+DOHSY5Ks6f1lVKwCCyC2Lk/QO2B+nDd8LPxVFBUCC+AoT56g5xFuIT5G2Spy/I8tpGmuxaC3kAJq/Nc2kFrk8NsYefys0nAL8S06kW8gdtqYV/QjU+R0s+rdtzcQs1xsg6O6BDJH7Zeo8rOjFHp1NFtWio02U8gcBWb5nH52DEPH3tIcjJJBaJJarlHnZ8XMFnIKy5Q/tcLSRext1hx3UulnQ/h5CDry7ZbmHe870DTVtlLqZ0NDH/bSuGupQ/OdbGyeVkqp9bMgZxJ7ZTS3LBGF/RJiTHqPBSdnQeNb7LiHbDVoLjvGJsoscC70WcK+mMAO+3Sjrbsa+lbrnLDg5Azp/Qvg6+KKtQT/y1pwqro4ceqnEd8CD3qg2142YxmcK7PK/g0/e0Ovuwwe8/SmNbJyd9ANkq6i5H8O6+3oMT+yOGVsz0FnKzlFzf8Mzu0E0EO+VGGPrkdd6GwF3vEx5KfevmLoEW/6YJGu6E10ukwh+yz+zNPXIHzAa9dtEvYani9zs4e6/+EbenMQPt6DeTYZ2wzBExZs5mPIj2K4ED7ckcVcm4wVJ/G3kNgYlf9jQO41+t+8pd1B4PDVJh+xUEzt/1BWf9bBD3al5fKi9wo4Cz7gz5AfwVhMwWp4nGuXNNwxwJ9hrYPq/z7OKzhOG6fOMmv5jxWwZvrYBOj7ke7XEOmuR7YTfwdBBbQFj/PogO9gIKTBII+tF9/BFz//ufNus03Wt9F6Q0OczaR14qILKojr2uTvwm/h9pGKMNfab2VT0BxQQV2ykS74xgXkQVBFlIfyM7D3qjhjmchqPn3w1ZvmpIoLiAncygB5eZUquDOXD1ly8jUUteiIcXYmOj2FmyM62Ksd4zXky5ga1BFhU52RZOWVmBL62sfphS+eEfqVLIGRB7mZ4K+nT4lBzC6Lsr6AsluOkvimhjPD4KwWgwR5Uf9/5M6ntcS3L5oZCq+saWEwVFNBR/zjinmnUEt0I825meGwp1oLhSb9nC/qf8f6WzXBjWWqW3lYyVvhR/SO0BOfo3gooia2fRnrNNuq5oxlTJJzdT7Ds6tBPaE9yVgaP0/PGet0nTlPX/yF6I4ifxRmLotfcKCIR7PB8Z7/QXzUURTXxxlsM7up6IzaJQ1tAAAPzklEQVRlzAq/T/257m3XK4pqcD+TS82GJoM0zcXpjqysnA8XNEW1az2DXIbfNKlyyCgfDLPCe6qOBWYrozFt7FVFprPo+wfDcFWLrpDOZ7Ye4aoqNk39ts8dkjOmyx9mOsMXy72QLj5TJ74erRPW5o9IW4Z7nxUvG2UO6fazQ5Sdr07D+TTTlI5GtFF64ttTVlidP8zgTKZJfRnTxmn263z6QwkS3RkvQo0+0UaqX7O9BffV+cP0TmR+2RloUuiQqP/8kVOn7ixgzFUPtCdfv6eP16Y531WdxPfX9MWx/t8eYLZsJ6KPWWfFZ5WL0dmUviiaak+M2RtRuDUbs+Cr/yElbY7GIDZ7gtyZDY3cmr4i//ij4XpQYwhjV7yRHdxXufqY9o4yn/jj7m5AZQSXPPLm25BUSa/pGvDFk2H4RZ/O+JVXeYXhUZ0Em+waHzyI5M63KA3fgmeS9SNppRSHlia0+yN+uKY0eEHvDEcqva6UYxM42lR+PZ8LaY1di4e6cHSktLJs2t+XKvbHtScBtZFb9dCQ75lBtTSbC809Wu1RMX9Pb9zSwx5iOudWQi/Ticd3lb4OHmTrjZpZ8dTO3zitmGqzfD9XoT8mdh3FMXOqPEV22WJQs0PSNTPa7HFuL6k5YqaywVt8t8ZU0x3ceqmr/ftMW7bugE16LF75/UY32us0/REp2ggoD5fn7o1V2codklpVUwGfd9KiPFiRWc9t+Pm7Rjv6OlTUZoVbtxztoer14FzWqnL1DkmtKqg8menuUh+oSJsHC7E1Pxb+LzeyB/6unlukf/swJubJAqHuoA8cUr50Bdkfxc0tPgiS6fdkFXbjsh+4Ny3bsKUnF98fNfkhRNlVnqS/YNvxhUOcjY5zkKer8Z16XwTIbHj0G8/EK3/wb1JzEwVw/nh20BLxR3jKq7y6RM0GfOKQSO/rBix7RN8fOT4JjtmIezUK52/4JQZ/sHcnfEltXQCHNwqCIyA4o2SpOGMkGOGQpmmaSeYMmkPaRSu1sul2L1/9tX5vN+9NDfQcOPvs//MRWGuxh7X3PmlHw60qecqj4tVwrTKhqR03bBxsfosyYUgHn/hccpTH7bWnTnXikl428MHSpncKBSId3JyXoCtie7gaUioq+0YORrxYpVikC5/GDP65HVuTf9qiVEyWDX0zoSmcVsvNhMfAz8vZH6pWHqcDiN3Qq8G4YvFIp92Drwy67V4y0TFdrFo4lg3exlVoI+sfkZdHBhzWXWs9IfViEfxiN3aBlPgtaQVLpHFyzlgXEErn799TMBDpGcOfA1JrI+tnX+T57LFhbovYvAvDLUqGwbBNdNWHkFMFoTc+Q9zKLVvzJ9vVjIGBm+hnTmQtplXVsjy5l+eZVsncl82QugEw/gAihP21Q9kApS2dO/Pe/C0T+z2flR08vjmU4mzDVDKtspaGz6/ysqlV1DW77FT6p4/IMICcLhGjBWm13fg6G3uc28cYXRPRzZsWtX/24ruSfM6lajmtPHdjfDRncy3XxN8b4QJ+c2m+Kmn6N7IyURlpeOCb0/3u4e2U5/1WiJ/7dP23Is0tNtcB4fquPTn48fixfnEra1pINDj5nb8LrwtpzO8Srx/tkZavPQuex5o3EW1le9v+mZCDX/jHADIr0evJRQkCdnYgcdYnJv/oLtIqgjVez5f4VshazE/702JASOQ4TMT+s8Wy2zuzuu3pLrreyr1mbmJ+9m79jXZ+0X9zTEr1/L5t1ULMzuHsHX5zMjYx1Z/9VcTyub2u/fjBYijIz3iOLa+QSnc9MbuI9cbzxrur0fGugLe/qOjST01W1BWVpbrXfAsdO1vJUC1zqosU9gnJRFk+/mYb2FrbWd+4kVj9cGd72xeLefa8p1KplNcbaPLEYq+2tydn44mNrYFHzVYHpXH5Cl2WHuGZbuFLwpZZbIsLrNaWSOSe+1ToXTjsdnfeC+1Gmq3WymImqpmRp0f401iEuCFHo3Fcwi+3FD3l7w+5Ud8qJPSwk8ghF9rfylgfouQD63Tkwqak31dNcaoXOeD0CEntB4ke9FbQ0yZrgZRzJAu6G2oV0lqfJn7Ql3VB3voQ9kkrEYSuDvolLhDxuJEIQk+hY5nrQ9hfuYkh9NN+p0LqAhEV8UqiCP1W6CkhuWdDRBF6KVySvT6Era+WOEIflp5y6QtE1NEMgU7qnwkTWH9HJKGH5j67GQrEFmWSBV0mWNXCFFybXBiF9pLdwiQmeokmNJ9gLdnNUiDibZB4QuMJ1k61aepDlA8SUGirNyBMZIRjvdBU5MhupgIRUY71QssJ1psaU9WHKGOSBQ01dAuTmUgSVWil8EiYTh/fDIFGiuW9hs7Bd+ivcUqYUOoJkYUWOv8QpjTvJLa4PusdmzkLpOSESRau78AlTIpTi7i+T8fCtB4uEl9cT+24eetD2JdYhuBaClaqTVwgvPiOa5LtY53Zqtoixri6R8fC5EY4coIra75lM3uBiKMW4owrLkAeuExfH6I8zsl3sAC55OT7IZHGVXSuCSXs1RNrZM+5b1ejQITPSbSRrcrZEkXqQ7Sd0A1BlooHq4QyynY4tojsDASEQrx8FAFZudcllBLjHSBkoUX2L0llfWzRx7fZkDHLaptQjL2DhToyrY/DfqGc0oSFyCMjQwGhoNZhIo9MhLuEkpo42IsMOL8IRb0IEX38jrWjRtUCsS3w2iJ+o+CNSyir5ANH33H5BtZBSiisjK0sXL6B1SSUltrgqSxcrNcjFPdsmSzARdwvhPJGeEwOF4hE7RSI8LHZiws2eMspDyEqFgrJBfzKseOiOr6pe02F4Jz66Kc2flRILfmAf7Pcpz7+Ub7C2Xf8W2OAuvjJu0lG4KxFDxtYZ3W/JCdwpj5i1MR/K4SWOn7opEH4a0udh07woz7GmV+d01IfYAzBN27q41xrn8gNpNMRBT4CcjVjj8gORKIllMJFFfKO/FBd4WQFhXCh0U4yRG3NHFC89ODieJgcUXr88JdRBZex97EOoT5wiW2uhyjLSn383u19KkTV9ccq9ZFRhbAOUXR97iL7M1ups5fF+gOXjCE+KoT6wCUV8oqOoXLzK+ojq546n2hTSiTK+iM7XQNkjUL1wfnErI1QIcq4GeX8VfYmqBBFdC5xfvdKYwjP9qpRH9yPuqIp7qkrIDlGfVy5QjZ5L8vkipMe8vzqWlf4BJW562P5mCy/jiLe7TV1fRx0k+PXU3enmTwyK8dOigy/doUscPzdpKw9HC/RgM3HN6hMyfmB6+faVMhII9lkPqGFanJbI4EZ8slsno/S/tDOXILtXnP5ukZWa6k/HiGpzKPgcI+c1ngza/8eeWUWwZXHZLTWKl48J7PMIcL2lS5iMxaSywSmtzndrg9vgrOL8hvgdKJuXB27JJjcHJssz3VU8oWne6XW7PeSxXqyx4a4RCUvd/Q2OayzqUEWIrIa8vF4if7K3nMAXkrWgwDZm5OeYR/He2XsfpzQHcwVzwzTLNkkj+h+5E73agspJ5PKlzGyNpeq/+QBeIkUPmB6lWMVXVtMs2TRe8ThqzwcPInXknpSTK+2eNonL9r+/ET2SdAc9FeRq3lqqzdtFpCARp9e+Wie589jv5MUNLJgYp0szetafX6IQcS4QpOszvPt4QNaIkZdnT+J0RzMv5ovfPHTkJz+ObLTEI4HeRTIcIob51mdG4XrbS8ZabDhI95KXhrIyGaQpDSOgoZ5PsvJIIILtKxwsdZwbOv3GUQMwdJw5CIfjTiIRHnRwQirj1U2rwzKvs5KJO+9j6+jNWSiYZX92UtjPb+9DzavjG3vs5M0zRfH4Si9D6Mr72tkEMmP3km+ySmD1PtpkjUPe7uDTeSeLPOsBJcNc744H2dvVx5FfQPcWM+lUAevMsil9YObtM3Z7GrHw8kS2VTEnvJEaW72rp7waImc+1lLjcyz9PfupJ9ck1Tp6098tU1f7pU9ZlcSC3wOkcT6qT2IUR5yaxu7e5NE1kf716NSMkz+LV/fS7oiOihIRmmcm0PZwpMgCa2x6fdTZJZppD4mK8lpbdfmZJWZ2AMnSb7+qRXnUx68Mh1bU/wRJaJNeXTVkU8mVLEXD5PeGpRHG7lk1onW6ShCil9H5G6M0YMSwfluPB3j1JXpS2SPtcgVJ1d/xXiPQY21iD/JrVyW5rh4RytwQl8kK+G/WJqrNdGau7XMdZEMOcIP1phcKafKd8gxxgxYB/5u4jEfJZWPJdzcF7lcy/BClZ1UUVX1yMonFiOXHLlKjHNdUG11gcmBdirhPMW9PcdFZAha5wd5AeUXtcuTAW4L4ru2EX89l6rODh6PEktcFsSZzoh3f5gF+/81N3bssa2L/3AdP1jka7lpS/i+r9RGOuBXNXNHw07FB4+GDw85j4gLlXreDym7GnE87xnl65v4zWqk9cWbaQWnWo7QRrSVliAycPvZduKRWq+WRobfjlQTeWSqeu3WhjIntXYH/GM0zJFtjXT5Z3YVaAgme+Z5AA5XUt7l3zL1tlbLaXXMsfDA1bV5Ph66g6ZseOwur8y30vHAdblGthO9JjvQ6Agd3PmjitffoNE40r2fqHea5a2H2s7Dt+suogot1bW+mN1yS98gqdwdWF3aozqgh9K1vjf1N+V9ESUYHvw4Rq8cOqro7/q42dsi38HfYOdhx3gTh3Shv+pW3+uNcK08SxKre+v90bNydqyQu62tqRcdm4s3jT+SOKaH40fPuP2E/7V3vy1NhWEcgJmudRJ1Lp3GmpqupZvmFOdEprV0iSWi1qT1z1qYiJapGEghfvWmHyEqp13Xi3PgeftwuO/fzcNzLqGSrBZn1hONG9yDwY1SpjzUaqe4NC1db8aP98aiDXa2MVSYqq3tFlddh0gD6EmPpPa/nRTCjRBLgoGp5dPJJ0MPHCGhgUy0xUd2F0r1juvSxsCh4ejJ3v7MVrrDsIrG/EoiXUPJrw9rG7Hwv43vQXSs93TloC/d5gp2Gl7r6vudn9XZuanY/b/ddOVi2UTp9Hjr6WjeFJcr5UZ+8XE5lXm7fDcbHfjDIb6peTD7rnd27XvycLurRdrgyro50R3vK36pZBY+Pkps3Cvkck2/WVVCQfhO4fOzRG1zf63yYmc7HelRNLg+BSXSkV/qnD/4MZmprm9uvpr7kI0VCrlwOAia6m5dODu7eIbOV24Hw+FwcyGafT49XSuVqv1Hn8aLnel8R5u/EXC9tUci+Xh69GVf53y5XElN1mX66zLV1+ev/pXzlaPKeDI5crg4uhSPt3Z3t2ukAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4T/wC4XABWXtOMagAAAAASUVORK5CYII=",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/2650.7e4d9d83a36a02a04840.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 315.191
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/3172.0ee65192669082574865.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2569.839
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/9003.f350bef70e696624155d.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2562.104
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/6914.7315969d96b1c3724d40.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2743.798
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/2522.a2b0251b958534973a93.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2562.82
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/8561.6d06bd39fc6f766ae899.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2565.521
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/3734.8e3fc34455c2694083c7.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2569.505
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/9793.5e724345405626b8f244.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2570.701
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/9793.d71c26502f2d295081c5.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2378.008
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/3140.8d8070bca6de4ab57148.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2565.623
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/3140.e82c7e32076b8f3a3126.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2577.308
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/1429.34e1d853191d6c918798.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2988.307
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/6127.f4926c2941c0602b6338.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 2953.74
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/6748.393e3e593383f4982c8b.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2561.801
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/5651.232931aad30b7cb163ef.css",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2741.852
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/5651.d5da68a34b285eef515a.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1126.13
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/users/get_user",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 2563.656
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/web_api/load?time=26929",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 2731.084
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/fonts/Gibson-Regular.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 2539.72
+  },
+  {
+    "method": "GET",
+    "url": "https://www.youtube.com/s/player/dac2d7b2/www-widgetapi.vflset/www-widgetapi.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 161.237
+  },
+  {
+    "method": "POST",
+    "url": "https://k.clarity.ms/collect",
+    "type": "XHR",
+    "status": 204,
+    "failed": null,
+    "ms": 1650.374
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/users/pricing/get_promoted_plans?commitments=0y%2C+999y%2C1999y%2C+1999m",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 464.874
+  },
+  {
+    "method": "GET",
+    "url": "https://c.clarity.ms/c.gif",
+    "type": "Image",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://track.hubspot.com/__ptq.gif?k=1&sd=1920x1080&cd=24-bit&cs=UTF-8&ln=en-us&bfp=09a19d6e48bebe0a2c03020f964a16c0&v=1.1&a=7697697&po=%2Fcp%2Fsignup&qo=false&opo=%2Fcp%2Fsignup&rcu=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&pu=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&t=Bright+Data+-+Web+Data+Platform&cts=1790192177224&vi=7b13db0e3c9d77851c3017170ab50308&nc=true&u=205946252.7b13db0e3c9d77851c3017170ab50308.1790192177221.1790192177221.1790192177221.1&b=205946252.1.1790192177221&cc=15",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 1344.936
+  },
+  {
+    "method": "GET",
+    "url": "https://track.hubspot.com/__ptq.gif?k=1&sd=1920x1080&cd=24-bit&cs=UTF-8&ln=en-us&bfp=09a19d6e48bebe0a2c03020f964a16c0&v=1.1&a=7697697&po=%2Fcp%2Fsignup&qo=false&opo=%2Fcp%2Fsignup&rcu=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&pu=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&t=Bright+Data+-+Web+Data+Platform&cts=1790192177225&vi=7b13db0e3c9d77851c3017170ab50308&nc=true&u=205946252.7b13db0e3c9d77851c3017170ab50308.1790192177221.1790192177221.1790192177221.1&b=205946252.1.1790192177221&cc=15",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 1342.262
+  },
+  {
+    "method": "POST",
+    "url": "https://perr.brightdata.com/client_cgi/perr?browser=chrome&id=www_brd_redirect",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 886.815
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/?hs_signup=1",
+    "type": "Document",
+    "status": 200,
+    "failed": null,
+    "ms": 2273.114
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/favicons/favicon.svg?md5=1101-2d66a6c4&hver=2",
+    "type": "Other",
+    "status": 200,
+    "failed": null,
+    "ms": 435.035
+  },
+  {
+    "method": "GET",
+    "url": "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onload_turnstile_cb",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/img/brd_logo_large.svg",
+    "type": "Image",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg width='10' height='8' viewBox='0 0 10 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M3.63803 5.42519L8.40556 0.645362C8.7608 0.289208 9.33772 0.289208 9.69296 0.645362C10.0469 1.00022 10.0469 1.57459 9.69296 1.92945L4.34605 7.29016C3.95532 7.6819 3.32075 7.6819 2.93002 7.29016L0.307079 4.66045C-0.0468663 4.30559 -0.0468661 3.73122 0.307079 3.37636C0.662317 3.02021 1.23924 3.02021 1.59448 3.37636L3.63803 5.42519Z' fill='var(--uikit-icon-white%2C%20%23FFFFFF)'/%3E%3C/svg%3E%0A",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/fonts/Gibson-Medium.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 380.448
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/fonts/Inter-VariableFont.ttf",
+    "type": "Font",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/favicons/favicon.ico?md5=4286-d2676905&hver=2",
+    "type": "Other",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/users/signup_stats",
+    "type": "XHR",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/fonts/Gibson-SemiBold.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 3453.02
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/fonts/Gibson-Regular.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 3449.827
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/fonts/Gibson-Book.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 3435.812
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/fonts/Gibson-Medium.woff",
+    "type": "Font",
+    "status": 200,
+    "failed": null,
+    "ms": 3438.355
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/libs/splide.min.css?ver=1790165569",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2749.528
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/helpers/tooltip.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2746.131
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/transparent_header.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2750.055
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/form.css?ver=1790165570",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2752.286
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/pages/brightai_chat.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2756.84
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/brd_script_co.min.css?ver=1790165575",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2746.144
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/brd_header.min.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2749.752
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/style.css?ver=1790165572",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2751.918
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/modals.css?ver=1790165572",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2756.846
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/forms.css?ver=1790165572",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2753.955
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/hero.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2752.284
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/pages/home_ai.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 2757.057
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/gallery.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3422.009
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/cta.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3420.014
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/line_item.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3423.999
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/line_item_custom.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3444.063
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/content.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3426.058
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/discovery.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3424.35
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/testimonials.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3440.212
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/card_container.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3420.74
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/sections/brdinitiative.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3446.602
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/brdinitiative_logos.min.css?ver=1790165575",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3425.598
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/templates/use_cases_slider.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3428.006
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/css/minified/brd_footer.min.css?ver=1790165574",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 3443.946
+  },
+  {
+    "method": "GET",
+    "url": "https://dev.visualwebsiteoptimizer.com/j.php?a=645829&u=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&vn=2",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1989.478
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2022'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/social/tp_short_dark.svg?ver=16052024",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 3392.567
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/social/g2_short_dark.svg?ver=16052024",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 3382.265
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/social/capterra_short_dark.svg?ver=16052024",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 3380.527
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/08/ic_mcp-1.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 1124.692
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20190%2030'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20143%2028'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20103%2020'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2090%2036'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20147%2030'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20102%2022'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20162%2020'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2082%2020'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20130%2040'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2095%2040'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20122%2040'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20106%2024'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2098%2040'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%201200%20301'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20769%20433'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20770%20433'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20769%20438'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20792%20715'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20580%20461'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20555%20421'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2034%2040'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20271%20104'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20147%2028'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20114%2035'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20108%2037'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20117%2032'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20154%2042'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2081%2035'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2040%2056'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20170%2031'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2058%2039'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20122%2036'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2096%2044'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20147%2020'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20157%2039'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2092%2050'%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 3169.909
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/libs/splide.min.js?ver=1790165569",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1522.65
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/libs/micromodal.min.js?ver=1790165570",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1458.923
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/hubspot_lp.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1460.975
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_main.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 285.356
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_script_co.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 301.097
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/general.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 438.168
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_cookie.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 540.66
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_form.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 542.324
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_modals.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 538.506
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/pricing_schema.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 577.138
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brd_forms.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 439.342
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/brightai_chat.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 452.565
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/acf_gallery.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 426.719
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/libs/gsap.min.js?ver=1790165570",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 353.586
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/libs/ScrollTrigger.min.js?ver=1790165570",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 797.916
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/js/minified/toggled_line_item.min.js?ver=1790165575",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 975.572
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/plugins/wp-rocket/assets/js/lazyload/17.8.3/lazyload.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 942.324
+  },
+  {
+    "method": "GET",
+    "url": "blob:https://brightdata.com/5ad3df0b-1866-4d30-ba0c-491879fc7aa5",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://dev.visualwebsiteoptimizer.com/cdn/edrv/va_gq-a19d73296758226c89cb9e36d7a076e9.br.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 530.948
+  },
+  {
+    "method": "GET",
+    "url": "https://dev.visualwebsiteoptimizer.com/collect/v.gif?cd=0&a=645829&d=brightdata.com&u=D9E3C083A7472123D43563A5A9E7DE3BC&h=81518b4c7a21b64d310de6e131ebbe96&t=true",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 339.053
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/bg_hero_gradient_home_ai.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 355.879
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M1.99961 8.00028C1.99961 8.13289 2.05229 8.26006 2.14605 8.35383C2.23982 8.4476 2.367 8.50028 2.49961 8.50028H12.2927L8.64586 12.1465C8.5994 12.193 8.56255 12.2481 8.53741 12.3088C8.51227 12.3695 8.49933 12.4346 8.49933 12.5003C8.49933 12.566 8.51227 12.631 8.53741 12.6917C8.56255 12.7524 8.5994 12.8076 8.64586 12.854C8.69231 12.9005 8.74746 12.9373 8.80816 12.9625C8.86885 12.9876 8.93391 13.0006 8.99961 13.0006C9.0653 13.0006 9.13036 12.9876 9.19106 12.9625C9.25175 12.9373 9.3069 12.9005 9.35336 12.854L13.8534 8.35403C13.8998 8.30759 13.9367 8.25245 13.9619 8.19175C13.987 8.13105 14 8.06599 14 8.00028C14 7.93457 13.987 7.86951 13.9619 7.80881C13.9367 7.74811 13.8998 7.69296 13.8534 7.64653L9.35336 3.14653C9.25954 3.05271 9.13229 3 8.99961 3C8.86692 3 8.73968 3.05271 8.64586 3.14653C8.55204 3.24035 8.49933 3.3676 8.49933 3.50028C8.49933 3.63296 8.55204 3.76021 8.64586 3.85403L12.2927 7.50028H2.49961C2.367 7.50028 2.23982 7.55296 2.14605 7.64672C2.05229 7.74049 1.99961 7.86767 1.99961 8.00028Z' fill='white'/%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cg clip-path='url(%23clip0_8148_348)'%3E%3Cpath d='M4.54394 0.646484H2.71588C1.57288 0.646484 0.64624 1.57312 0.64624 2.71613V9.28417C0.64624 10.4272 1.57288 11.3538 2.71588 11.3538H9.28392C10.4269 11.3538 11.3536 10.4272 11.3536 9.28417V7.45611' stroke='white' stroke-opacity='0.8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M5.40479 6.59542L11.3537 0.646484' stroke='white' stroke-opacity='0.8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M11.3538 0.646484V4.16516' stroke='white' stroke-opacity='0.8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M11.3536 0.646484H7.83496' stroke='white' stroke-opacity='0.8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3Cdefs%3E%3CclipPath id='clip0_8148_348'%3E%3Crect width='12' height='12' fill='white'/%3E%3C/clipPath%3E%3C/defs%3E%3C/svg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/bg_hero_grid_home_ai_new.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 332.105
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/bg_gallery_left.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 715.149
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/bg_gallery_right.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 316.074
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2214%22%20height%3D%2212%22%20fill%3D%22none%22%20viewBox%3D%220%200%2014%2012%22%3E%3Cpath%20stroke%3D%22%2376a5ff%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222.462%22%20d%3D%22m1.83%207.082%203.181%203.61L12.17%202.57%22%2F%3E%3C%2Fsvg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/image_1_bg.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 272.591
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/image_2_bg.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 290.822
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/image_3_bg.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 365.828
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/grid_center_bg.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 367.489
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/hero_grid.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 378.15
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/hp_line_item_grid.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 385.363
+  },
+  {
+    "method": "GET",
+    "url": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2214%22%20height%3D%2212%22%20fill%3D%22none%22%20viewBox%3D%220%200%2014%2012%22%3E%3Cpath%20stroke%3D%22%233d7ffc%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%222.462%22%20d%3D%22m1.83%207.082%203.181%203.61L12.17%202.57%22%2F%3E%3C%2Fsvg%3E",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/bg/bg_cta_home_ai.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 369.056
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/symbols_brd.svg?ver=1790165566",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 278.343
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/users/get_user",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 1053.863
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/cdn-cgi/challenge-platform/h/b/scripts/precursor/d76008a69eab/main.js?",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.298
+  },
+  {
+    "method": "GET",
+    "url": "https://dev.visualwebsiteoptimizer.com/cdn/edrv/nc-5e31d16db644a35d947b3c9fa96a71c3.br.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 467.587
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_cdnlogo.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 254.87
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_club_med.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 257.517
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_deloitte.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 259.51
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_etoro.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 257.791
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_mcdonalds.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 251.899
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_moodys.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 154.025
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2025/07/logo_nbc_universal.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 271.022
+  },
+  {
+    "method": "GET",
+    "url": "https://dev.visualwebsiteoptimizer.com/dcdn/settings.js?a=645829&settings_type=4&ts=1790168455&dt=desktop&cc=US",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 517.881
+  },
+  {
+    "method": "POST",
+    "url": "https://brightdata.com/cdn-cgi/challenge-platform/h/b/precursor/d76008a69eab/0.8538382937316252:1790190031:amXC4B3AfwISylT2JrmDtn9vCYPUGDLTUh5GXkIBDcs/a3fbff54c9a97642",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 657.09
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-json/brd/info",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 1095.975
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/signup_right_bg.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 322.407
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/www/lum/pub/img/loading_indicator.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 438.569
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hsforms.net/forms/v2.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1769.588
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_mcdonalds_white.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 1012.934
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_un_light.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 462.403
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_deloitte.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 836.69
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_shopee_white.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 869.155
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_epson_white.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 429.069
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/logo_statista_white.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 824.286
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2022/08/updated_David-Barros_Worten-50x50.png",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 301.593
+  },
+  {
+    "method": "GET",
+    "url": "https://media.brightdata.com/2024/05/saeid_mirzaei.png",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 274.061
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/trustpilot_colored.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 984.613
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/g2_colored.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 447.607
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/capterra_colored.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 710.098
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/wp-content/themes/brightdata/assets/images/favicon.png",
+    "type": "Other",
+    "status": 200,
+    "failed": null,
+    "ms": 787.985
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widget.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.332
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/2026-09-01-10-22-26/widget_app_base_1788258146788.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.269
+  },
+  {
+    "method": "POST",
+    "url": "https://api.userway.org/api/v1/tunings/5QpdnMuu2L",
+    "type": "Fetch",
+    "status": 200,
+    "failed": null,
+    "ms": 281.848
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/users/falcon?prev=&id=&page=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&rnd=0.4880307601135925&lse=nolp",
+    "type": "XHR",
+    "status": 200,
+    "failed": null,
+    "ms": 368.371
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/2026-09-01-10-22-26/remediation/remediation_1788258146788.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.514
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/styles/2026-09-01-10-22-26/widget_base.css?v=1788258146788",
+    "type": "Stylesheet",
+    "status": 200,
+    "failed": null,
+    "ms": 1.568
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/images/body_wh.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 0.527
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.userway.org/widgetapp/images/spin_wh.svg",
+    "type": "Image",
+    "status": 200,
+    "failed": null,
+    "ms": 1.462
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/dummy.js?form=1b5aae08-7cf9-4f9f-a7f8-5c84a3453574&rnd=0.4880307601135925",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 797.46
+  },
+  {
+    "method": "GET",
+    "url": "https://forms.hsforms.com/embed/v3/form/7697697/1b5aae08-7cf9-4f9f-a7f8-5c84a3453574/json?hs_static_app=forms-embed&hs_static_app_version=1.11349&X-HubSpot-Static-App-Info=forms-embed-1.11349&hutk=7b13db0e3c9d77851c3017170ab50308",
+    "type": "XHR",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://brightdata.com/dummy.js?brd_build_hs_form=v2_loaded&rnd=0.007386693782205356",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 783.221
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtm.js?id=GTM-MHTFV8F",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 228.801
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=AW-879571748&cx=c&gtm=4e69m0",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.409
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/js?id=G-KQX3XWKR2T&cx=c&gtm=4e69m0",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.386
+  },
+  {
+    "method": "GET",
+    "url": "https://eulady.thesmilingelbows.com/sxp/i/1923d44bc65deb42d6f5d7101a246f6b.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 1123.152
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://snap.licdn.com/li.lms-analytics/insight.min.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.302
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-scripts.com/7697697.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 0.236
+  },
+  {
+    "method": "GET",
+    "url": "https://bat.bing.com/bat.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 956.278
+  },
+  {
+    "method": "GET",
+    "url": "https://www.clarity.ms/tag/ct7q3t3lfz",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 963.013
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.taboola.com/libtrc/unip/1884498/tfa.js",
+    "type": "Script",
+    "status": 200,
+    "failed": null,
+    "ms": 762.347
+  },
+  {
+    "method": "GET",
+    "url": "https://cdn.jsdelivr.net/npm/hockeystack@latest/hockeystack.min.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://pixel.byspotify.com/ping.min.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://bzrcdn.openai.com/sdk/oaiq.min.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=7&frm=0&apvc=1&ae=g&auid=1454698646.1790192142&dt=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&en=page_view&dl=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&dr=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=1796263551.1790192195&navt=n&npa=0&ep.ads_data_redaction=0&gtm=45He69m0v831403075za200zd831403075xeaxf1&gcs=G111&gcd=13t3t3t3t5l1&dma=0&tag_exp=115938466~115938469~117776796~118897920~118897930~120385423~120469145~120469153&tft=1790192194780&tfd=17530&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 461.098
+  },
+  {
+    "method": "GET",
+    "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/879571748/?random=1790192194854&cv=11&fst=1790192194854&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xecxf1&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&ref=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=12&frm=0&tiba=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=4",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/rmkt/collect/879571748/?random=1790192194854&cv=11&fst=1790192194854&fmt=8&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xecxf1&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&ref=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=12&frm=0&tiba=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&data=event%3Dgtag.config&ept=68&gcp=5",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 467.447
+  },
+  {
+    "method": "GET",
+    "url": "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/879571748/?random=1790192194898&cv=11&fst=1790192194898&bg=ffffff&guid=ON&async=1&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&ref=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=12&frm=0&tiba=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&_tu=CA&ept=9&rfmt=3&fmt=4",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/rmkt/collect/879571748/?random=1790192194898&cv=11&fst=1790192194898&fmt=8&bg=ffffff&guid=ON&async=1&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&u_w=1920&u_h=1080&url=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&ref=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&rcb=12&frm=0&tiba=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=1454698646.1790192142&uaa=x86&uab=64&uafvl=Chromium%3B153.0.8010.36%7CNot_A%2520Brand%3B8.0.0.0&uamb=0&uam=&uap=Linux&uapv=6.6.0&uaw=0&_tu=CA&ept=68&gcp=5",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 609.638
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=12&frm=0&apvc=0&auid=1454698646.1790192142&dt=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&tid=AW-879571748&en=page_view&dl=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&dr=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=1796263551.1790192195&navt=n&npa=0&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xecxf1&gcs=G111&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&tft=1790192194907&tfd=17657&tids=AW-879571748&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 560.229
+  },
+  {
+    "method": "POST",
+    "url": "https://www.google.com/ccm/collect?rcb=12&frm=0&apvc=0&ae=g&auid=1454698646.1790192142&dt=Bright%20Data%3A%20Web%20Data%20Infrastructure%20for%20Humans%20%26%20Agents&tid=AW-879571748&dl=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&dr=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&scrsrc=www.googletagmanager.com&rnd=1796263551.1790192195&navt=n&npa=0&_tu=CA&gtm=45be69m0v889560231z8831403075za20gzb831403075zd831403075xeaxf1&gcs=G111&gcd=13t3t3t3t5l1&dma=0&tag_exp=115616986~115938466~115938469~117776796~118897920~118897930~120213116~120385422~120469145~120469153&tft=1790192194908&tfd=17659&tids=AW-879571748&fmt=8",
+    "type": "Fetch",
+    "status": 200,
+    "failed": "net::ERR_ABORTED",
+    "ms": 561.363
+  },
+  {
+    "method": "GET",
+    "url": "https://snap.licdn.com/li.lms-analytics/insight.beta.min.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hsadspixel.net/pixels.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-banner.com/v2/7697697/banner.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://js.hs-analytics.net/analytics/1790192100000/7697697.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://www.googletagmanager.com/gtag/destination?id=DC-16367809&cx=c&gtm=4e69m0",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://trc.taboola.com/1884498/trc/3/json?tim=1790192195698&data=%7B%22id%22%3A94%2C%22ii%22%3A%22%2F%22%2C%22it%22%3A%22video%22%2C%22sd%22%3Anull%2C%22ui%22%3Anull%2C%22vi%22%3A1790192195669%2C%22cv%22%3A%2220260916-1-RELEASE%22%2C%22uiv%22%3A%22default%22%2C%22u%22%3A%22https%3A%2F%2Fbrightdata.com%2F%22%2C%22e%22%3A%22https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup%22%2C%22cb%22%3A%22TFASC.trkCallback%22%2C%22qs%22%3A%22%3Fhs_signup%3D1%22%2C%22r%22%3A%5B%7B%22li%22%3A%22rbox-tracking%22%2C%22s%22%3A0%2C%22uim%22%3A%22rbox-tracking%3Apub%3Dbrightdata-article-sc%3Aabp%3D0%22%2C%22uip%22%3A%22rbox-tracking%22%2C%22orig_uip%22%3A%22rbox-tracking%22%7D%5D%2C%22mpvd%22%3A%7B%22en%22%3A%22page_view%22%2C%22tim%22%3A1790192195696%2C%22ref%22%3A%22https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup%22%2C%22item-url%22%3A%22https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1%22%2C%22tos%22%3A3%2C%22ssd%22%3A1%2C%22scd%22%3A0%2C%22it%22%3A%22JS_PIXEL%22%2C%22supv%22%3Atrue%7D%2C%22pa%22%3A%7B%22su%22%3Atrue%7D%2C%22psb%22%3Atrue%7D&pubit=i",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://scripts.clarity.ms/0.8.70/clarity.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://c.clarity.ms/c.gif",
+    "type": "Image",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://bat.bing.com/p/action/27009833.js",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  },
+  {
+    "method": "GET",
+    "url": "https://automn.thesmilingelbows.com/ct?id=24008&url=https%3A%2F%2Fbrightdata.com%2F%3Fhs_signup%3D1&sf=0&tpi=&ch=cheq4ppc&uvid=&tsf=0&tsfmi=&tsfu=&cb=1790192196078&hl=3&op=0&ag=1074146904&rand=5452545725051028629512772109700003683087212227275709113100857481502015449604590116679098620596072&fs=1280x720&fst=1280x720&np=linux%20x86_64&nv=google%20inc.&ref=https%3A%2F%2Fbrightdata.com%2Fcp%2Fsignup&ss=1920x1080&nc=0&at=&di=W1siZWYiLDU0NDddLFsiYWJuY2giLDJdLFstOCwiLSJdLFstMTksIlsxMCwxMCwxMCwxMCwwLDAsMSwyNCwyNCxcIi1cIiwxOTIwLDEwNDAsMTkyMCwxMDgwLDEyOTYsODA4LDEyODAsNzIwLDAsMCwwLDAsXCItXCIsXCItXCIsMTI4MCw3MjAsMF0iXSxbLTMwLCJbXCJ2XCIsMF0iXSxbLTUxLCItIl0sWy00LCItIl0sWy0yNSwiLSJdLFstMjksIi0iXSxbLTQzLCIwMDAwMDAwMTAxMDAwMDAxMDAxMTEwMTEwMTEwMTEwMTAwMDAwMTAxMTAxMSJdLFstNDgsIltcIi1cIixcIi1cIixcIi1cIixcIjQ5ODU4NTcxMlwiLFwiNDk4NTg1NzEyXCJdIl0sWy02NCwiWzAsXCJMaW51eFwiLFt7XCJiXCI6XCJDaHJvbWl1bVwiLFwidlwiOlwiMTI4XCJ9LHtcImJcIjpcIkdvb2dsZSBDaHJvbWVcIixcInZcIjpcIjEyOFwifSx7XCJiXCI6XCJOb3QpQTtCcmFuZFwiLFwidlwiOlwiMjRcIn1dXSJdLFstNjgsIi0iXSxbLTcwLCItIl0sWy03MSwiYTAxMTAwMTAxMDAxMDAxMDEwMDAxMDEwMDAwMTExMDEwMDAwMTAiXSxbLTczLCJFaFE9Il0sWy0yMCwiMTE4MzI0MDUxNi4xNzkwMTkyMTQzIl0sWy0yNiwie1widGpoc1wiOjU5NTQzNTk2LFwidWpoc1wiOjUwMjk4NTA0LFwiamhzbFwiOjQzOTU2MzA1OTJ9Il0sWy01MywiMDAxIl0sWy01OCwiLSJdLFstNzIsIkV4VT0iXSxbLTIxLCItIl0sWy0yMiwiW1wiblwiLFwiblwiXSJdLFstMjgsImVuLVVTLGVuIl0sWy0zMywiLSJdLFstMzUsIlsxNzkwMTkyMTk2MDUyLDRdIl0sWy00MSwiLSJdLFstNTAsIi0iXSxbLTU5LCJkZWZhdWx0Il0sWy02OSwiLSJdLFstNzYsIi0iXSxbNTMsIlsyMTA2NTE3Nzc0LCgpPT5kb2N1bWVudFtcIl9fXCIrZV1dIl0sWzcxLCJzb3VyY2VVUkw9cGxsX2Nvb2tpZV9zY3JpcHQtanMtYWZ0ZXJcbiJdLFstMzIsIi0iXSxbLTQyLCI4ODMzOTkwMTYiXSxbLTQ0LCIwLDAsMCw1Il0sWy00NywiLSJdLFstNjAsIi0iXSxbLTc0LCIwLDAiXSxbLTMsIltcImludGVybmFsLXBkZi12aWV3ZXJcIixcImludGVybmFsLXBkZi12aWV3ZXJcIixcImludGVybmFsLXBkZi12aWV3ZXJcIixcImludGVybmFsLXBkZi12aWV3ZXJcIixcImludGVybmFsLXBkZi12aWV3ZXJcIl0iXSxbLTksIisiXSxbLTYzLCItIl0sWy02NiwiZ2VvbG9jYXRpb24sY2h1YWZ1bGx2ZXJzaW9ubGlzdCxjcm9zc29yaWdpbmlzb2xhdGVkLHNjcmVlbndha2Vsb2NrLG9uZGV2aWNlc3BlZWNocmVjb2duaXRpb24sdHJhbnNsYXRvcixwdWJsaWNrZXljcmVkZW50aWFsc2dldCxjaHVhYXJjaCxjb21wdXRlcHJlc3N1cmUsY2hwcmVmZXJzcmVkdWNlZHRyYW5zcGFyZW5jeSxkZWZlcnJlZGZldGNoLHVzYixjaHNhdmVkYXRhLHB1YmxpY2tleWNyZWRlbnRpYWxzY3JlYXRlLGRlZmVycmVkZmV0Y2htaW5pbWFsLGNoZG93bmxpbmssY2h1YWZvcm1mYWN0b3JzLG90cGNyZWRlbnRpYWxzLHBheW1lbnQsY2h1YSxjaHVhbW9kZWwsY2hlY3QsYXV0b3BsYXksY2FtZXJhLGxhbmd1YWdlZGV0ZWN0b3IscHJpdmF0ZXN0YXRldG9rZW5pc3N1YW5jZSxkaWdpdGFsY3JlZGVudGlhbHNnZXQsYWNjZWxlcm9tZXRlcixjaHVhcGxhdGZvcm12ZXJzaW9uLGlkbGVkZXRlY3Rpb24sbGFuZ3VhZ2Vtb2RlbCxpbnRlcmVzdGNvaG9ydCxjaHZpZXdwb3J0aGVpZ2h0LGNhcHR1cmVkc3VyZmFjZWNvbnRyb2wsbG9jYWxmb250cyxjaHVhcGxhdGZvcm0sbWlkaSxjaHVhZnVsbHZlcnNpb24seHJzcGF0aWFsdHJhY2tpbmcsY2xpcGJvYXJkcmVhZCxnYW1lcGFkLGRpc3BsYXljYXB0dXJlLGtleWJvYXJkbWFwLGFyaWFub3RpZnksbG9jYWxuZXR3b3JrLGNodWFoaWdoZW50cm9weXZhbHVlcyxjaHdpZHRoLGNocHJlZmVyc3JlZHVjZWRtb3Rpb24sYnJvd3Npbmd0b3BpY3MsZW5jcnlwdGVkbWVkaWEsbG9jYWxuZXR3b3JrYWNjZXNzLGd5cm9zY29wZSxzZXJpYWwsY2hydHQsY2h1YW1vYmlsZSx3aW5kb3dtYW5hZ2VtZW50LHVubG9hZCxjaGRwcixjaHByZWZlcnNjb2xvcnNjaGVtZSxjaHVhd293NjQsZnVsbHNjcmVlbixpZGVudGl0eWNyZWRlbnRpYWxzZ2V0LHByaXZhdGVzdGF0ZXRva2VucmVkZW1wdGlvbixoaWQsc3VtbWFyaXplcixjaHVhYml0bmVzcyxzdG9yYWdlYWNjZXNzLHN5bmN4aHIsY2hkZXZpY2VtZW1vcnksY2h2aWV3cG9ydHdpZHRoLHBpY3R1cmVpbnBpY3R1cmUsbG9vcGJhY2tuZXR3b3JrLG1hZ25ldG9tZXRlcixjbGlwYm9hcmR3cml0ZSxtaWNyb3Bob25lIl0sWzcwLCJzOlsyMTUwNTUxNjg5LHQ9PntpZihcInN0cmluZ1wiPT10eXBlb2YgdCl0PXt2YWx1ZTp0fTtlbHNlIGlmKCFyZS5pbnRlcm5hbFV0aWxzKCkuaXNDb29raWVQYXlsb2FkT2JqZWN0KHQpKXJldHVybiB2b2lkIGNvbnNvbGUuZXJyb3IoXCJJbnZhbGlkIHZhbHVlIHR5cGUhXCIpO2NvbnN0e3ZhbHVlOm4sZnJvbVRocmVhZDpvfT10O2xldHtvcmlnaW46aX09dCxyPSEwO3JldHVybihyZS5pbnRlcm5hbFV0aWxzKCkuaXNDdXJyZW50Q29udGV4dE1UfHxcIk1BSU5cIj09PW8pJiYoZG9jdW1lbnQuX19jb29raWU9bixyPVwiTUFJTlwiIT09byksciYmZSh7dHlwZTpcInN5bmNcIixkYXRhOntwcm9wZXJ0eU5hbWU6XCJjb29raWVcIix2YWx1ZTp7dmFsdWU6cmUuaW50ZXJuYWxVdGlscygpLmlzQ3VycmVudENvbnRleHRNVD9kb2N1bWVudC5fX2Nvb2tpZTpuLGZyb21UaHJlYWQ6cmUuaW50ZXJuYWxVdGlscygpLmlzQ3VycmVudENvbnRleHRNVD9cIk1BSU5cIjpcIldPUktFUlwiLG9yaWdpbjpuZT9cIldPUktFUlwiOml9fSxzeW5jVHlwZTpCLkRvY3VtZW50fSksITB9XXxnOlsyMTA2NTE3Nzc0LCgpPT5kb2N1bWVudFtcIl9fXCIrZV1dIl0sWy01LCItIl0sWy0zNywiLTE0NC02Ni0iXSxbLTc1LCJ7fS5zb21lRnVuYyBpcyBub3QgYSBmdW5jdGlvbiJdLFstNywiLSJdLFstMTMsIi0iXSxbLTM0LCItIl0sWy00NiwiMCJdLFstNjUsIi0iXSxbLTIsIi0iXSxbLTExLCJ7XCJ0XCI6XCJcIixcIm1cIjpbXCJkZXNjcmlwdGlvblwiLFwib2c6dGl0bGVcIixcIm9nOmRlc2NyaXB0aW9uXCJdfSJdLFstMTcsIjgiXSxbLTI0LCJbXCJ3ZWJkcml2ZXJcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcInBsYXRmb3JtXCIsXCI4MzY2MjE4MDlcIixcIi1cIiwwLDEsXCJ2ZW5kb3JcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcImxhbmd1YWdlXCIsXCI4MzY2MjE4MDlcIixcIi1cIiwwLDEsXCJsYW5ndWFnZXNcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcImhhcmR3YXJlQ29uY3VycmVuY3lcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcImRldmljZU1lbW9yeVwiLFwiODM2NjIxODA5XCIsXCItXCIsMCwxLFwibWF4VG91Y2hQb2ludHNcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcIm9zY3B1XCIsXCI4MzY2MjE4MDlcIixcIi1cIiwwLDEsXCJkb05vdFRyYWNrXCIsXCI4MzY2MjE4MDlcIixcIi1cIiwwLDEsXCJwbHVnaW5zXCIsXCI4MzY2MjE4MDlcIixcIi1cIiwwLDEsXCJtaW1lVHlwZXNcIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcImNvbm5lY3Rpb25cIixcIjgzNjYyMTgwOVwiLFwiLVwiLDAsMSxcImdldEJhdHRlcnlcIiwwLG51bGwsMSwxLFwicGRmVmlld2VyRW5hYmxlZFwiLFwiODM2NjIxODA5XCIsXCItXCIsMCwxLFwic3RhbmRhbG9uZVwiLFwiODM2NjIxODA5XCIsXCItXCIsMCwxXSJdLFstMjcsIls1MCwxMC41LDAsXCI0Z1wiLG51bGwsXCItXCJdIl0sWy01NSwiMSJdLFstNTYsImxhbmRzY2FwZS1wcmltYXJ5Il0sWy01NywiV0UwWmVFdExXRUFYZkZ3WkVWRk5UVWxLQXhZV1hFeFZXRjFBRjAxUlhFcFVVRlZRVjE1Y1ZWdFdUa29YV2xaVUZrcEJTUlpRRmdnQUN3cGREUTFiV2c4TVhWeGJEUXRkRDE4TVhRNElDUWhZQ3cwUFh3OWJGMU5LQXdnRER3MEFBQWtRRlZoTkdVc1pFVkZOVFVsS0F4WVdYRXhWV0YxQUYwMVJYRXBVVUZWUVYxNWNWVnRXVGtvWFdsWlVGa3BCU1JaUUZnZ0FDd3BkRFExYldnOE1YVnhiRFF0ZEQxOE1YUTRJQ1FoWUN3MFBYdzliRjFOS0F3Z0REZ2tCQ3dvUSJdLFstNjEsIntcIndnc2xcIjpcIjEyO3BhY2tlZF80eDhfaW50ZWdlcl9kb3RfcHJvZHVjdDtzdWJncm91cF91bmlmb3JtaXR5O2ltbWVkaWF0ZV9hZGRyZXNzX3NwYWNlO3N1Ymdyb3VwX2lkO2xpbmVhcl9pbmRleGluZztyZWFkb25seV9hbmRfcmVhZHdyaXRlX3N0b3JhZ2VfdGV4dHVyZXM7dW5yZXN0cmljdGVkX3BvaW50ZXJfcGFyYW1ldGVycztidWZmZXJfdmlldztwb2ludGVyX2NvbXBvc2l0ZV9hY2Nlc3M7dGV4dHVyZV9mb3JtYXRzX3RpZXIxO3RleHR1cmVfYW5kX3NhbXBsZXJfbGV0O3VuaWZvcm1fYnVmZmVyX3N0YW5kYXJkX2xheW91dDtcIixcInBjZlwiOlwicmdiYTh1bm9ybVwifSJdLFstNjIsIjgwIl0sWzM1LFsxLDFdXSxbLTEsIi0iXSxbLTYsIi0iXSxbLTEyLCJudWxsIl0sWy0xNCwiLSJdLFstMTUsIi0iXSxbLTMxLCItIl0sWy0zNiwiW1wiNC8zXCIsXCIxNi85XCJdIl0sWy0zOCwiYywtMSwtMSw1LDAsMCwwLDAsMCwzMjY5LC0xLDYyLDY4MjAsNjgyMCwxODgyMiwxODgyMyJdLFstNDUsIi0iXSxbLTQ5LCItIl0sWy01NCwie1wiaFwiOltcIl8zXCIsXCIzMjk5OTEzNjlcIixcIl8yXCIsXCIzOTc2NjA4MTE3XCJdLFwiZFwiOltdLFwiYlwiOltcIl8wXCIsXCIzMjY2ODIwNzU2XCIsXCJfMlwiLFwiMTM2Mjc2MDgzOFwiXSxcInNcIjoxfSJdLFsiYm5jaCIsNDNdLFstMTAsIi0iXSxbLTE2LCIwIl0sWy0xOCwiWzAsMCwwLDFdIl0sWy0yMywiKyJdLFstMzksIltcIjIwMDMwMTA3XCIsMSxcIkdlY2tvXCIsXCJOZXRzY2FwZVwiLFwiTW96aWxsYVwiLG51bGwsbnVsbCx0cnVlLDgsZmFsc2UsbnVsbCw1LHRydWUsdHJ1ZSxudWxsLDAsdHJ1ZSx0cnVlLGZhbHNlLHRydWVdIl0sWy00MCwiMzMiXSxbLTUyLCItIl0sWy02NywiLSJdLFsiZGRiIiwiMCwwLDAsMCwxLDAsMCwwLDAsMCwwLDAsMCwwLDIsMSwwLDAsMCwwLDAsMCwwLDEsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDIsMCwwLDAsMCwwLDEsMSwzLDAsMSwwLDEsMCwwLDAsMCwwLDEsMCwwLDAsMCwwLDAsMSwwLDAsMCwwLDAsMSwwLDEsMSwwLDEsMCwwLDAsMCJdLFsiY2IiLCIwLDAsMCwwLDAsMCwwLDAsMCwyLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDEsMCwwLDAsMCwwLDAsMCwxLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDAsMCwwLDEsMCwwLDEsMCwwLDAsMCwwLDAsMCwwLDAsMSwwLDAsMCwxLDEsMCwwLDAsMCwwLDEsMCwwLDAsMCwxLDEsMCwwLDAsMCwwLDAsMSwwIl1d&dep=0&pre=0&sdd=&cri=dxRW6sSYbH&pto=18829&ver=66&gac=1183240516.1790192143&mei=&ap=&fe=1&duid=1.1790192196.iiDF5TQLvajbrKeu&suid=1.1790192196.BZsPmZind6Ci3biG&tuid=1.1790192196.a7zSRafn2Fm6jhQD&sid=1.1790192196081.W92oWAGwqzVqUPW5&fbc=-&gtm=W10%3D&it=128%2C17510%2C1256&fbcl=-&gacl=-&gacsd=-&rtic=-&rtict=-&bgc=-&spa=1&urid=0&ab=&sck=-&io=Ojk2Oy0%2BOTY7LWhgNjotJjk2Oy0mPz42Oy1uc2hGZGU2Oi0mPzw2Oy0mPzI2Oy0mPjo2Oy1uc2hKeHJlaDY6LWVkbXk2Oi1qbXp4Nn5%2FZlRoamZ7amJsZQ%3D%3D",
+    "type": "Script",
+    "status": null,
+    "failed": null,
+    "ms": null
+  }
+]

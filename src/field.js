@@ -120,87 +120,142 @@ export async function exportSession(target) {
 /* ───────────────────────────── captcha / widget awareness ───────────────────────────── */
 
 export const WIDGETS = [
-  { type: 'turnstile', token: ['input[name="cf-turnstile-response"]', 'textarea[name="cf-turnstile-response"]', 'input[name="cf_chl_opt"]'], markers: ['iframe[src*="challenges.cloudflare.com"]', '[id^="turnstile_container"]', '.cf-turnstile', '[class*="turnstile"]'], sitekey: /(?:sitekey|data-sitekey)[=":\s]+([0-9A-Za-z_-]{10,})/ },
-  { type: 'recaptcha', token: ['textarea[name="g-recaptcha-response"]', '#g-recaptcha-response'], markers: ['iframe[src*="recaptcha/api2"]', '.g-recaptcha', '[id^="g-recaptcha"]'], sitekey: /data-sitekey="([^"]+)"/ },
-  { type: 'hcaptcha', token: ['textarea[name="h-captcha-response"]', 'input[name="h-captcha-response"]'], markers: ['iframe[src*="hcaptcha.com"]', '.h-captcha', '[id^="hcaptcha"]'], sitekey: /data-sitekey="([^"]+)"/ },
-  { type: 'arkose', token: ['input[name="fc-token"]', 'input[name="arkose-token"]', 'input[name="verification-token"]'], markers: ['iframe[src*="arkoselabs.com"]', 'iframe[src*="funcaptcha"]', '[id^="arkose"]', '#arkose-iframe'], sitekey: /data-pkey="([^"]+)"/ },
-  { type: 'awswaf-grid', token: ['input[name="aws-waf-token"]', '#aws-waf-token'], markers: ['#amzn-captcha-verify-button', '#captcha-container', 'img[src*="captcha"]', '[id^="awswaf"]'], sitekey: /data-sitekey="([^"]+)"/ },
-  { type: 'px', token: ['input[name="_px3"]', 'input[name="px-token"]'], markers: ['#px-captcha', '[class*="px-captcha"]', '[id^="px-"]'], sitekey: null },
+  { type: 'turnstile', script: 'challenges\.cloudflare\.com/turnstile', iframe: 'challenges\.cloudflare\.com', key: /(0x4AAAAA[A-Za-z0-9_-]+|[a-zA-Z0-9_-]{20,})/, token: ['input[name="cf-turnstile-response"]', 'textarea[name="cf-turnstile-response"]'], markers: ['#turnstile-container', '.cf-turnstile', '#turnstile-wrapper', '#cf-turnstile'] },
+  { type: 'recaptcha', script: 'recaptcha/(api|releases)', iframe: 'recaptcha/api2', key: /[?&]k=([\w-]+)/, token: ['textarea[name="g-recaptcha-response"]', '#g-recaptcha-response'], markers: ['.g-recaptcha', '#g-recaptcha', '#recaptcha-demo'] },
+  { type: 'hcaptcha', script: 'hcaptcha\.com', iframe: 'hcaptcha\.com', key: /[?&]sitekey=([\w-]+)/, token: ['textarea[name="h-captcha-response"]', 'input[name="h-captcha-response"]'], markers: ['.h-captcha', '#hcaptcha-demo', '#hcaptcha-container'] },
+  { type: 'arkose', script: 'arkoselabs\.com', iframe: 'arkoselabs\.com|funcaptcha', key: /[?&](?:pk|pkey)=([\w-]+)/, token: ['input[name="fc-token"]', 'input[name="arkose-token"]', 'input[name="verification-token"]'], markers: ['#arkose', '#arkose-iframe', '.arkose-challenge'] },
+  { type: 'awswaf-grid', script: 'awswaf|aws-waf', iframe: 'awswaf', key: null, token: ['input[name="aws-waf-token"]', '#aws-waf-token'], markers: ['#amzn-captcha-verify-button', '#captcha-container', '#awswaf-iframe'] },
+  { type: 'px', script: 'px-cloud|perimeterx', iframe: 'px-cloud|perimeterx', key: null, token: ['input[name="_px3"]', 'input[name="px-token"]'], markers: ['#px-captcha', '.px-captcha'] },
 ];
 
-/** Structured info about whatever anti-bot widget is on the page. */
+/**
+ * Structured info about whatever anti-bot widget is on the page.
+ *
+ * Real pages are ambiguous: hCaptcha in "recaptcha compat" mode also renders a
+ * `g-recaptcha-response` field, and Cloudflare mounts Turnstile inside a closed shadow
+ * root where a plain `querySelectorAll('iframe')` cannot see it. So evidence is weighted
+ * (script/iframe > container > token field), shadow roots are pierced, and the sitekey
+ * is read out of the widget's iframe URL when the container carries no data-sitekey.
+ */
 export async function detectChallenge(page) {
-  const found = [];
+  const probe = await page.eval(`(function(){
+    var deep = function(sel){
+      var out = Array.prototype.slice.call(document.querySelectorAll(sel));
+      var walk = document.createTreeWalker(document, NodeFilter.SHOW_ELEMENT);
+      var el;
+      while ((el = walk.nextNode())) {
+        if (el.shadowRoot) out = out.concat(Array.prototype.slice.call(el.shadowRoot.querySelectorAll(sel)));
+        if (el.tagName === 'IFRAME') { try { if (el.contentDocument) out = out.concat(Array.prototype.slice.call(el.contentDocument.querySelectorAll(sel))); } catch (e) {} }
+      }
+      return out;
+    };
+    var scripts = Array.prototype.map.call(document.scripts, function(s){ return s.src || ''; }).filter(Boolean);
+    var iframes = deep('iframe').map(function(f){ return f.src || ''; }).filter(Boolean);
+    var nodes = deep('[id*="captcha"],[class*="captcha"],[id^="turnstile"],[class*="turnstile"],[id^="g-recaptcha"],[id^="hcaptcha"],[id^="arkose"],[id^="px-"],[data-pkey],[data-sitekey]').map(function(e){
+      var r = e.getBoundingClientRect();
+      return { id: e.id || null, cls: (e.className && String(e.className)) || '', tag: e.tagName.toLowerCase(),
+               key: (e.getAttribute && (e.getAttribute('data-sitekey') || e.getAttribute('data-pkey'))) || null,
+               w: Math.round(r.width), h: Math.round(r.height), visible: r.width > 0 && r.height > 0 };
+    });
+    var inputs = Array.prototype.map.call(document.querySelectorAll('input,textarea'), function(i){ return i.name || i.id || ''; });
+    return { scripts: scripts, iframes: iframes, nodes: nodes, inputs: inputs, html: document.documentElement.outerHTML.length };
+  })()`).catch(() => ({ scripts: [], iframes: [], nodes: [], inputs: [] }));
+
+  const scored = [];
   for (const w of WIDGETS) {
-    const html = await page.content().catch(() => '');
+    let score = 0;
     const markers = [];
-    for (const m of w.markers) {
-      // container ids are frequently dynamic (turnstile_container_6243…) → prefix match
-      const ok = await page.count(m).catch(() => 0);
-      if (ok > 0) markers.push({ selector: m, count: ok });
+    const scriptRe = w.script ? new RegExp(w.script, 'i') : null;
+    const iframeRe = w.iframe ? new RegExp(w.iframe, 'i') : null;
+    const hitScript = scriptRe ? probe.scripts.find((s) => scriptRe.test(s)) : null;
+    if (hitScript) { score += 5; markers.push(`script:${hitScript.slice(0, 70)}`); }
+    const hitFrame = iframeRe ? probe.iframes.find((s) => iframeRe.test(s)) : null;
+    if (hitFrame) { score += 4; markers.push(`iframe:${hitFrame.slice(0, 70)}`); }
+    for (const n of probe.nodes) {
+      const idHit = n.id && w.markers.some((m) => m.startsWith('#') && n.id.toLowerCase().startsWith(m.slice(1).toLowerCase().replace(/-container.*$/, '')));
+      const clsHit = n.cls && w.markers.some((m) => m.startsWith('.') && n.cls.toLowerCase().includes(m.slice(1).toLowerCase().replace(/-container.*$/, '')));
+      if (idHit || clsHit) { score += 2; markers.push(`node:${n.id || n.cls}`); }
     }
-    const tokens = await page.count(w.token.join(',')).catch(() => 0);
-    if (!markers.length && !tokens) continue;
-    const result = await page.eval(`(function(){
-      const sel = ${JSON.stringify(w.markers)};
-      let el = null, sel_used = null;
-      for (const s of sel) { const e = document.querySelector(s); if (e) { el = e; sel_used = s; break; } }
-      const frame = el && el.tagName === 'IFRAME' ? el : document.querySelector('iframe[src*="captcha"],iframe[src*="arkose"],iframe[src*="cloudflare"]');
-      const r = el ? el.getBoundingClientRect() : null;
-      const tokenEl = document.querySelector(${JSON.stringify(w.token.join(','))});
-      const scripts = Array.from(document.scripts).map(s => s.src).filter(Boolean);
-      const scriptLoaded = scripts.some(s => new RegExp(${JSON.stringify(w.type)}.replace('awswaf-grid','waf').replace('recaptcha','recaptcha|gstatic'), 'i').test(s));
-      return {
-        containerId: el ? el.id || null : null,
-        iframeUrl: frame && frame.src ? frame.src : null,
-        visible: !!(r && r.width > 0 && r.height > 0),
-        tokenPresent: !!(tokenEl && String(tokenEl.value || '').length > 8),
-        tokenLength: tokenEl ? String(tokenEl.value || '').length : 0,
-        scriptLoaded,
-        sitekey: (document.querySelector('[data-sitekey]') || {}).getAttribute ? document.querySelector('[data-sitekey]').getAttribute('data-sitekey') : null,
-      };
-    })()`).catch(() => ({}));
-    const sk = (html.match(w.sitekey) || [])[1] || result.sitekey || null;
-    found.push({ type: w.type, ...result, sitekey: sk, markers: markers.map((m) => m.selector) });
+    if (probe.inputs.some((n) => w.token.some((t) => n && n.toLowerCase().includes(t.replace(/^.*name="?/, '').replace(/"?\]$/, '').toLowerCase())))) { score += 1; markers.push('token-field'); }
+    if (score > 0) {
+      const node = probe.nodes.find((n) => n.visible) || probe.nodes[0] || {};
+      const keyFromUrl = (() => {
+        for (const u of [...(hitFrame ? [hitFrame] : []), ...probe.iframes]) {
+          const m = w.key ? u.match(w.key) : null;
+          if (m) return m[1];
+        }
+        return null;
+      })();
+      scored.push({
+        type: w.type, score, markers,
+        sitekey: node.key || keyFromUrl || null,
+        iframeUrl: hitFrame || null,
+        containerId: node.id || null,
+        visible: !!node.visible,
+        scriptLoaded: !!hitScript,
+      });
+    }
   }
-  return found[0] || { type: null };
+  if (!scored.length) return { type: null };
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0];
+  const winner = WIDGETS.find((w) => w.type === best.type);
+  const tokenLength = await page.eval(`(function(){
+    var sels = ${JSON.stringify(winner.token)};
+    for (var i = 0; i < sels.length; i++) { var e = document.querySelector(sels[i]); if (e) return String(e.value || '').length; }
+    return 0;
+  })()`).catch(() => 0);
+  return { ...best, tokenPresent: tokenLength > 8, tokenLength, competitors: scored.slice(1).map((s) => `${s.type}:${s.score}`) };
 }
 
 /**
- * Wait for a captcha token field to populate. Reports WHICH state it died in, so a
- * timeout says "widget never rendered" instead of a silent null.
+ * Wait for a captcha token field to populate.
+ *
+ * On timeout it reports WHICH state it died in — "the widget never rendered" is a very
+ * different problem from "the widget rendered but the field stayed empty" — instead of
+ * returning null and leaving you guessing. It does not solve the puzzle; it removes the
+ * boilerplate around waiting for the token that a real solve produces.
  */
 export async function waitForCaptchaToken(page, selector, { timeout = 60000, poll = 250, type } = {}) {
   let sel = selector;
+  let widgetType = type || null;
   if (!sel) {
     const info = await detectChallenge(page);
-    const w = WIDGETS.find((x) => x.type === (type || info.type)) || WIDGETS[0];
+    widgetType = widgetType || info.type;
+    const w = WIDGETS.find((x) => x.type === widgetType) || WIDGETS[0];
     sel = w.token.join(',');
   }
+  const firstSel = String(sel).split(',')[0];
   const t0 = Date.now();
-  let last = { tokenLength: 0, tokenPresent: false, widget: false, scriptLoaded: false };
+  let last = { found: false, tokenLength: 0, widget: 0, scriptLoaded: false };
   while (Date.now() - t0 < timeout) {
     const state = await page.eval(`(function(){
-      const el = document.querySelector(${JSON.stringify(String(sel).split(',')[0])});
-      const any = ${JSON.stringify(String(sel))}.split(',').map(s => document.querySelector(s)).find(Boolean);
-      const nodes = document.querySelectorAll('iframe, [class*=captcha], [id^=turnstile], [id^=g-recaptcha], [id^=hcaptcha], [id^=arkose], [id^=awswaf]');
+      var any = null;
+      var sels = ${JSON.stringify(String(sel).split(','))};
+      for (var i = 0; i < sels.length; i++) { var e = document.querySelector(sels[i]); if (e) { any = e; break; } }
+      var nodes = document.querySelectorAll('iframe, [class*="captcha"], [id^="turnstile"], [id^="g-recaptcha"], [id^="hcaptcha"], [id^="arkose"], [id^="awswaf"], [id^="px-"]');
       return {
-        tokenLength: any ? String(any.value || '').length : 0,
         found: !!any,
+        tokenLength: any ? String(any.value || '').length : 0,
         widget: nodes.length,
-        scriptLoaded: Array.from(document.scripts).some(s => /captcha|turnstile|recaptcha|hcaptcha|arkose|waf|px-cloud/i.test(s.src || '')),
+        scriptLoaded: Array.prototype.some.call(document.scripts, function(s){ return /captcha|turnstile|recaptcha|hcaptcha|arkose|waf|px-cloud|arkoselabs/i.test(s.src || ''); }),
       };
     })()`).catch(() => last);
     last = state || last;
-    if (state.found && state.tokenLength > 8) return await page.eval(`document.querySelector(${JSON.stringify(String(sel).split(',')[0])}).value`);
+    if (state.found && state.tokenLength > 8) {
+      return await page.eval(`(function(){var e=document.querySelector(${JSON.stringify(firstSel)}); return e ? e.value : null})()`);
+    }
     await sleep(poll);
   }
-  const state = last.found ? (last.tokenLength ? 'token empty/too short' : 'token field present but never populated')
-    : last.widget ? 'widget present but token field missing'
-      : last.scriptLoaded ? 'script loaded but widget never rendered'
+  const reason = last.found
+    ? (last.tokenLength ? 'token field present but stayed empty/too short (challenge not solved)' : 'token field present but never populated')
+    : last.widget > 0 ? 'widget present but the token field is missing (wrong selector?)'
+      : last.scriptLoaded ? 'captcha script loaded but the widget never rendered'
         : 'captcha script never loaded (blocked, wrong domain, or never requested)';
-  const err = new Error(`waitForCaptchaToken: timed out after ${timeout}ms — state: ${state}`);
-  err.state = state; err.detail = last;
+  const err = new Error(`waitForCaptchaToken: timed out after ${timeout}ms — state: ${reason}`);
+  err.state = reason;
+  err.detail = last;
+  err.widget = widgetType;
   throw err;
 }
 
