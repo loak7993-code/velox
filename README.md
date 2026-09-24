@@ -257,7 +257,7 @@ await p.clock.setFixedTime('2024-06-01T10:00:00Z');
 await p.clock.fastForward(60_000);               // virtual timers fire instantly
 
 const s = await b.newPage({ stealth: true });    // webdriver, WebGL, plugins,
-                                                 // chrome.runtime, languages, …
+                                                 // window.chrome, languages, …
 ```
 
 ### Capture
@@ -704,9 +704,62 @@ paced run           → no velocity flag
 scripted typing     → machine-likeness 1.0 · human typing 0.0
 ```
 
+### When a website fingerprints you
+
+A site does not fingerprint "the browser" — it hashes a dozen surfaces and concatenates the
+results into one identifier. Two things follow, and velox handles both:
+
+1. **within one identity the fingerprint must be stable** (otherwise every page load looks
+   like a new device), and
+2. **between identities it must differ on at least one component** (otherwise your accounts
+   are one person with many email addresses).
+
+```js
+// one coherent device per identity: seed drives every rotating surface together
+const ctx = await b.newContext({ stealth: velox.identity.stealth(identity) });
+// or drive it directly
+const ctx = await b.newContext({ stealth: { profile: 'chrome-windows', seed: 4242 } });
+```
+
+What rotates with the seed, and what a site can link on:
+
+| surface | rotates per identity | notes |
+|---|---|---|
+| canvas 2D image | ✅ | deterministic per seed; identical on repeat reads |
+| **rendered WebGL image** | ✅ | the strongest GPU signal — pixels move, not just the reported renderer |
+| WebGL renderer/vendor | ✅ | pool of 30 real cards; **never** a software rasteriser (SwiftShader/llvmpipe are VM tells) |
+| WebGL limits + extension order | ✅ | driver-version-like variance per identity |
+| audio fingerprint | ✅ | |
+| element geometry (ClientRects) | ✅ | stable sub-pixel jitter per element |
+| UA / Client Hints / screen / tz / locale | ✅ | version-aligned to the real binary, locale and language never disagree |
+| **fonts** | ❌ | text metrics can't be faked without breaking rendering — the one surface that stays shared. Rotating it needs a real font set per platform. |
+| screen resolution / OS build | via profile | set the profile, not the seed |
+
+Verified on a live third-party page (`npm run ipfighter`, ipfighter.com): across two
+identities, **4 of 5 hashed components differ** — canvas, rendered WebGL, audio, element
+geometry — and each identity is byte-stable across reloads. Their bot-detection page scores:
+
+| run | score | suspicious signals | failing checks |
+|---|---|---|---|
+| velox, no stealth | 84% | 8 | webdriver, HeadlessChrome UA, missing `window.chrome`, 0 plugins, SwiftShader WebGL, … |
+| **velox, `stealth: true`** | **98%** | **1** | `chrome.runtime` missing — a check a **genuine** Chromium also fails |
+| control: clean Chromium, no velox at all | 90% | 5 | webdriver, HeadlessChrome UA, SwiftShader, 800×600 VM screen, `chrome.runtime` |
+
+Two of those fixes came directly from that page's own checks:
+
+- **Accessor integrity.** It reads `Object.getOwnPropertyDescriptor(Navigator.prototype, prop).get`
+  and rejects a getter that has an own `prototype` property (every function *expression* does),
+  a non-native `toString`, or a wrong `name`. velox installs method-shorthand getters named
+  `get <prop>` that report `[native code]` and throw `TypeError: Illegal invocation` on a
+  foreign receiver — byte-identical to a real WebIDL accessor.
+- **Don't invent surface.** Our old shim added `chrome.runtime` because a detector complained
+  it was missing. A clean Chromium page has `{app, csi, loadTimes}` and **no** `runtime` — so
+  the shim was itself the anomaly. It is now opt-in (`stealth: { chromeRuntime: true }`).
+
 ### Tested against real platforms
 
-`npm run platforms` drives real vendors (network required) and reports what it found:
+`npm run platforms` drives real vendors and `npm run ipfighter` a real detection +
+fingerprinting site (both need network, both skip cleanly offline) and report what they found:
 
 | target | result |
 |---|---|
@@ -715,6 +768,8 @@ scripted typing     → machine-likeness 1.0 · human typing 0.0
 | **reCAPTCHA v2** — official demo | detected with sitekey read from the anchor iframe's `k=` parameter |
 | **Arkose Labs** — real `client-api.arkoselabs.com` script, public test key | script + container + sitekey identified before the challenge mounts |
 | **sannysoft bot detector** | **0 failed checks** |
+| **ipfighter bot detection** | 98% human / 1 suspicious signal (clean Chromium control: 90% / 5) |
+| **ipfighter browser fingerprint** | 4/5 hashed components rotate per identity; fonts stay shared (documented limit) |
 
 Detection is weighted, because real pages are ambiguous: hCaptcha's compat mode also emits
 `g-recaptcha-response`, and Cloudflare mounts Turnstile inside a *closed* shadow root — so

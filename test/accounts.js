@@ -268,6 +268,63 @@ await soft('runner reports steps, scores, reasons and a summary table', async ()
   return true;
 });
 
+
+/* ── 8. fingerprint surfaces: what a site can link identities by ──────────── */
+// A site does not fingerprint "the browser" — it concatenates component hashes. Two accounts
+// that differ on ANY of them are two visitors; accounts that match on all of them are one.
+const surfaceProbe = `(function () {
+  var c = document.createElement('canvas');
+  var gl = c.getContext('webgl');
+  var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+  var box = document.body;
+  return {
+    webglRenderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : String(gl && gl.getParameter(gl.RENDERER)),
+    webglVendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : '',
+    maxTexture: gl ? gl.getParameter(3379) : 0,
+    maxVarying: gl ? gl.getParameter(35660) : 0,
+    extFirst: gl && gl.getSupportedExtensions() ? gl.getSupportedExtensions()[0] : '',
+    rect: (function () { var r = box.getBoundingClientRect(); return r.x.toFixed(3) + ',' + r.width.toFixed(3); })(),
+    audio: String(typeof OfflineAudioContext === 'function'),
+    screen: screen.width + 'x' + screen.height + '@' + screen.colorDepth,
+    ua: navigator.userAgent,
+  };
+})()`;
+
+const fingerprints = {};
+// a fresh context's first navigation can resolve a tick before the new document is live,
+// so wait for the document to exist before reading surfaces out of it
+const probeSurfaces = async (page) => {
+  for (let i = 0; i < 20; i++) {
+    const ready = await page.eval('!!document.body').catch(() => false);
+    if (ready) return page.eval(surfaceProbe);
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return page.eval(surfaceProbe);
+};
+await soft('each identity gets its own fingerprint surfaces', async () => {
+  for (const seed of [101, 202, 303, 404]) {
+    const ctx = await b.newContext({ stealth: { seed } });
+    const page = await ctx.newPage();
+    await page.goto(`${site.url}/signup.html`, { waitUntil: 'domcontentloaded' });
+    fingerprints[seed] = await probeSurfaces(page);
+    // the same identity must stay itself
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const again = await probeSurfaces(page);
+    check(`identity ${seed} is stable across reloads`, JSON.stringify(again) === JSON.stringify(fingerprints[seed]), 'surfaces changed on reload');
+    await ctx.close();
+  }
+  const all = Object.values(fingerprints);
+  const distinct = (key) => new Set(all.map((f) => f[key])).size;
+  console.log(`     distinct across 4 identities: webgl=${distinct('webglRenderer')} maxTex=${distinct('maxTexture')} maxVarying=${distinct('maxVarying')} extOrder=${distinct('extFirst')} rects=${distinct('rect')}`);
+  check('GPU identity varies per account', distinct('webglRenderer') >= 3, String(distinct('webglRenderer')));
+  check('GPU limits vary per account', distinct('maxTexture') >= 2 || distinct('maxVarying') >= 2, `${distinct('maxTexture')}/${distinct('maxVarying')}`);
+  check('extension order varies per account', distinct('extFirst') >= 2, String(distinct('extFirst')));
+  check('element geometry varies per account', distinct('rect') === 4, String(distinct('rect')));
+  const rasteriser = all.filter((f) => /swiftshader|llvmpipe|software/i.test(f.webglRenderer));
+  check('no identity claims a software rasteriser', rasteriser.length === 0, JSON.stringify(rasteriser.map((f) => f.webglRenderer)));
+  return true;
+});
+
 await b.close();
 site.server.close();
 const fails = results.filter(([, ok]) => !ok);

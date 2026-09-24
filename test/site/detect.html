@@ -22,6 +22,55 @@
   add('webdriver flag', 3, navigator.webdriver === undefined, String(navigator.webdriver));
   // descriptor-level check (sannysoft's "WebDriver (New)" + creepjs): our patches must not
   // appear as own properties of the navigator instance — real Chrome inherits them
+  // ── accessor integrity (the class of check ipfighter's "getter integrity" performs) ──
+  add('navigator getters have no own prototype/arguments/caller', 3, safe(function () {
+    var bad = [];
+    ['webdriver', 'platform', 'languages', 'hardwareConcurrency', 'deviceMemory'].forEach(function (p) {
+      var d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(navigator), p);
+      if (!d || !d.get) { bad.push(p + ':missing'); return; }
+      ['prototype', 'arguments', 'caller'].forEach(function (k) { if (Object.prototype.hasOwnProperty.call(d.get, k)) bad.push(p + '.' + k); });
+    });
+    return bad.length === 0;
+  }, false), safe(function () {
+    var out = [];
+    ['webdriver', 'platform'].forEach(function (p) {
+      var d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(navigator), p);
+      if (d && d.get) out.push(p + '=' + Object.getOwnPropertyNames(d.get).join('|'));
+    });
+    return out.join(' ') || 'n/a';
+  }, ''));
+  add('navigator getters reject a foreign receiver', 3, safe(function () {
+    var d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(navigator), 'platform');
+    if (!d || !d.get) return false;
+    try { d.get.call({}); return false; } catch (e) { return e instanceof TypeError; }
+  }, false), 'TypeError on d.get.call({})');
+  add('navigator getters are named like WebIDL accessors', 2, safe(function () {
+    var np = Object.getPrototypeOf(navigator);
+    return ['webdriver', 'platform', 'languages'].every(function (p) {
+      var d = Object.getOwnPropertyDescriptor(np, p);
+      return d && d.get && d.get.name === 'get ' + p;
+    });
+  }, false), 'getter.name === "get <prop>"');
+  add('window.chrome matches a clean page (no invented runtime)', 2, safe(function () {
+    var keys = Object.keys(window.chrome || {}).sort().join(',');
+    return keys === 'app,csi,loadTimes';
+  }, false), safe(function () { return Object.keys(window.chrome || {}).sort().join(','); }, ''));
+  add('webgl renderer is real hardware, not a rasteriser', 3, safe(function () {
+    var c = document.createElement('canvas'), gl = c.getContext('webgl');
+    if (!gl) return true;
+    var ext = gl.getExtension('WEBGL_debug_renderer_info');
+    var r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    return !/swiftshader|llvmpipe|software|basic render/i.test(r);
+  }, true), safe(function () {
+    var gl = document.createElement('canvas').getContext('webgl');
+    var ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '');
+  }, ''));
+  add('element geometry is stable across repeated reads', 2, safe(function () {
+    var el = document.body;
+    var a = el.getBoundingClientRect(), b = el.getBoundingClientRect();
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+  }, false), 'two reads of the same rect must agree');
   add('navigator patches are inherited, not own props', 3, safe(() => {
     var owned = Object.getOwnPropertyNames(navigator);
     var suspicious = ['webdriver','platform','vendor','language','languages','hardwareConcurrency','deviceMemory','maxTouchPoints','plugins','mimeTypes','userAgentData','connection'];
@@ -50,7 +99,7 @@
 
   // ── window.chrome ────────────────────────────────────────────────────────
   add('window.chrome exists', 3, !!window.chrome, String(!!window.chrome));
-  add('chrome.runtime + app', 2, !!(window.chrome && window.chrome.runtime && window.chrome.app), JSON.stringify(Object.keys(window.chrome || {})));
+  add('chrome.app + loadTimes + csi', 2, !!(window.chrome && window.chrome.app && typeof window.chrome.loadTimes === 'function' && typeof window.chrome.csi === 'function'), JSON.stringify(Object.keys(window.chrome || {})));
   add('chrome.loadTimes/csi functions', 1, typeof (window.chrome || {}).loadTimes === 'function' && typeof (window.chrome || {}).csi === 'function', 'n/a');
 
   // ── permissions coherence ────────────────────────────────────────────────

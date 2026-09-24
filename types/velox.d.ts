@@ -255,6 +255,8 @@ declare module 'velox' {
     webrtc?: 'default' | 'block';
     mediaDevices?: boolean;
     hideEngine?: boolean;
+    /** add the chrome.runtime shim — OFF by default: a clean page has {app, csi, loadTimes} only */
+    chromeRuntime?: boolean;
   }
 
   export interface ChallengeInfo {

@@ -114,6 +114,7 @@ export function resolveStealth(opt) {
     webrtc: o.webrtc ?? 'default',          // 'default' | 'block'
     mediaDevices: o.mediaDevices !== false,
     hideEngine: o.hideEngine !== false,
+    chromeRuntime: o.chromeRuntime === true,
   };
 }
 
@@ -159,6 +160,7 @@ export function buildStealthSource(resolved) {
     maxTouchPoints: v.maxTouchPoints || 0, mobile: !!v.mobile,
     noise: r.noise, seed: r.seed, webrtc: r.webrtc, mediaDevices: r.mediaDevices,
     uaMetadata: r.userAgentMetadata,
+    chromeRuntime: !!r.chromeRuntime,     // off by default: a clean page has no chrome.runtime
   })};
 
   var def = function (obj, prop, value, enumerable) {
@@ -173,10 +175,25 @@ export function buildStealthSource(resolved) {
     // own property on the instance is exactly what "WebDriver (New)" style checks look for
     var target = navProto || navigator;
     try {
-      Object.defineProperty(target, prop, {
-        get: (value && value.__getter) ? value.fn : function () { return value; },
-        configurable: true, enumerable: !!enumerable,
-      });
+      var g;
+      if (value && value.__getter) {
+        g = value.fn;
+      } else {
+        // build a function literally NAMED "get <prop>" (WebIDL shape) and register it as
+        // native-looking, so both Function.prototype.toString and .name match a real browser
+        // WebIDL semantics: a real attribute getter throws "Illegal invocation" when
+        // called on a foreign receiver. Detectors call the getter with a dummy object to see
+        // whether it is a genuine accessor or a patched one that answers for anything.
+        var lit = value;
+        g = { ['get ' + prop]() {
+          if (this !== navigator && !(this && typeof this === 'object' && 'userAgent' in this)) {
+            throw new TypeError("Failed to read the '" + prop + "' property from 'Navigator': Illegal invocation");
+          }
+          return lit;
+        } }['get ' + prop];
+      }
+      if (typeof markNative === 'function') g = markNative(g, 'get ' + prop);
+      Object.defineProperty(target, prop, { get: g, configurable: true, enumerable: !!enumerable });
     } catch (e) { try { navigator[prop] = value; } catch (e2) {} }
   };
 
@@ -197,11 +214,13 @@ export function buildStealthSource(resolved) {
     patched.set(Function.prototype.toString, fakeNative('toString'));
   } catch (e) {}
   var markNative = function (fn, name) { patched.set(fn, fakeNative(name || fn.name || '')); return fn; };
+  var originals = new WeakMap();
   var patch = function (holder, prop, impl, name) {
     try {
       var orig = holder[prop];
-      holder[prop] = markNative(impl, name || prop);
-      if (orig && orig.__orig) {} else { try { holder[prop].__orig = orig; } catch (e) {} }
+      // bookkeeping stays OUT of the function object: an own property on a patched builtin is
+      // visible to any enumeration-based integrity check
+      originals.set(holder[prop] = markNative(impl, name || prop), orig);
     } catch (e) {}
   };
 
@@ -215,6 +234,17 @@ export function buildStealthSource(resolved) {
     // stable pseudo-noise: same input → same output, so repeated reads agree
     var s = (R.seed >>> 0) ^ Math.imul(Math.floor(hash(key) * 4294967296), 2654435761);
     s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+
+  // Selection noise needs a full avalanche: noiseAt() only perturbs low bits, so
+  // floor(noise * n) — which reads the high bits — came out identical for every seed and
+  // every identity reported the same GPU. seedPick() mixes properly (murmur3 finaliser).
+  var seedPick = function (key) {
+    var s = (R.seed >>> 0) ^ Math.imul(Math.floor(hash(key) * 4294967296) >>> 0, 2654435761);
+    s = (s ^ (s >>> 16)) >>> 0; s = Math.imul(s, 2246822507) >>> 0;
+    s = (s ^ (s >>> 13)) >>> 0; s = Math.imul(s, 3266489909) >>> 0;
+    s = (s ^ (s >>> 16)) >>> 0;
     return s / 4294967296;
   };
 
@@ -267,7 +297,7 @@ export function buildStealthSource(resolved) {
   try {
     if (!window.chrome) window.chrome = {};
     var c = window.chrome;
-    if (!c.runtime) {
+    if (!c.runtime && R.chromeRuntime) {          // off by default: clean pages have none
       c.runtime = {
         OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', OTHER: 'other', SHARED_MODULE_UPDATE: 'shared_module_update' },
         OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
@@ -298,17 +328,87 @@ export function buildStealthSource(resolved) {
     }
   } catch (e) {}
 
-  // ── 5. WebGL vendor/renderer + extension consistency ─────────────────────
+  // ── 5. WebGL identity: per-seed GPU + per-driver limits ──────────────────
+  // A GPU is one of the strongest linking signals: two "different people" who report the
+  // exact same renderer and the exact same capability limits are the same machine. Real GPUs
+  // differ along both axes, so the seed picks a plausible card and nudges the limits the way
+  // different driver versions report them.
   try {
+    var GL_POOL = {
+      // real cards only: a software rasteriser (llvmpipe/SwiftShader) is itself a VM tell,
+      // so it never appears in an identity
+      'chrome-windows': [
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x000046A8) Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (AMD)', 'ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (AMD)', 'ANGLE (AMD, AMD Radeon RX 6600 Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Intel(R) HD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)'],
+      ],
+      'chrome-mac': [
+        ['Google Inc. (Apple)', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)'],
+        ['Google Inc. (Apple)', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)'],
+        ['Google Inc. (Apple)', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)'],
+        ['Google Inc. (Apple)', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)'],
+        ['Google Inc. (Apple)', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Intel(R) Iris(TM) Plus Graphics, Unspecified Version)'],
+        ['Google Inc. (AMD)', 'ANGLE (AMD, AMD Radeon Pro 5500M, Unspecified Version)'],
+      ],
+      'chrome-linux': [
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6)'],
+        ['Google Inc. (Intel)', 'ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (TGL GT2), OpenGL 4.6)'],
+        ['Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060/PCIe/SSE2, OpenGL 4.6)'],
+        ['Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL 4.6)'],
+        ['Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.6)'],
+        ['Google Inc. (AMD)', 'ANGLE (AMD, AMD Radeon RX 6600/PCIe/SSE2, OpenGL 4.6)'],
+        ['Google Inc. (AMD)', 'ANGLE (AMD, AMD Radeon RX 580/PCIe/SSE2, OpenGL 4.5)'],
+      ],
+      'chrome-android': [
+        ['Google Inc. (Qualcomm)', 'Adreno (TM) 740'],
+        ['Google Inc. (Qualcomm)', 'Adreno (TM) 730'],
+        ['Google Inc. (Qualcomm)', 'Adreno (TM) 642L'],
+        ['Google Inc. (ARM)', 'Mali-G710'],
+        ['Google Inc. (ARM)', 'Mali-G78'],
+        ['Google Inc. (ARM)', 'Mali-G68'],
+        ['Google Inc. (Imagination)', 'PowerVR Rogue GE8320'],
+      ],
+    };
+    var pool = GL_POOL[R.profile] || GL_POOL['chrome-linux'];
+    var pick = pool[Math.floor(seedPick('gpu') * pool.length) % pool.length];
+    var glVendor = pick[0], glRenderer = pick[1];
+    // capability limits: real drivers of the same card report slightly different maxima
+    var LIMITS = {
+      3379:  [8192, 16384, 16384],   // MAX_TEXTURE_SIZE
+      34076: [16384, 32768, 32768], // MAX_RENDERBUFFER_SIZE
+      35660: [15, 30, 31],          // MAX_VARYING_VECTORS
+      35661: [256, 1024, 4096],     // MAX_VERTEX_UNIFORM_VECTORS
+      35667: [224, 1024, 4096],     // MAX_FRAGMENT_UNIFORM_VECTORS
+      35621: [16, 16, 16],          // MAX_VERTEX_ATTRIBS
+    };
+    var jitterLimit = function (p, real) {
+      var opts = LIMITS[p];
+      if (!opts) return real;
+      var f = seedPick('gl:' + p);
+      return opts[Math.floor(f * opts.length) % opts.length];
+    };
     var patchGL = function (proto) {
       if (!proto) return;
       var gp = proto.getParameter;
       patch(proto, 'getParameter', function (p) {
-        if (p === 37445) return R.webglVendor;         // UNMASKED_VENDOR_WEBGL
-        if (p === 37446) return R.webglRenderer;       // UNMASKED_RENDERER_WEBGL
-        if (p === 7936) return R.webglVendor;          // VENDOR
-        if (p === 7937) return R.webglRenderer;        // RENDERER
-        return gp.apply(this, arguments);
+        if (p === 37445) return glVendor;            // UNMASKED_VENDOR_WEBGL
+        if (p === 37446) return glRenderer;          // UNMASKED_RENDERER_WEBGL
+        if (p === 7936) return glVendor;             // VENDOR
+        if (p === 7937) return glRenderer;           // RENDERER
+        var real = gp.apply(this, arguments);
+        // ALIASED_LINE_WIDTH_RANGE: a Float32Array, real drivers vary in their steps
+        if (p === 33901 && real && real.length === 2) {
+          try { var w = new Float32Array(real); w[0] = 1; w[1] = 1 + (seedPick('gl:lw') > 0.5 ? 1 : 0.5); return w; } catch (e) { return real; }
+        }
+        if (typeof real === 'number' && Object.prototype.hasOwnProperty.call(LIMITS, p)) return jitterLimit(p, real);
+        return real;
       }, 'getParameter');
       var ge = proto.getExtension;
       patch(proto, 'getExtension', function (name) {
@@ -319,9 +419,62 @@ export function buildStealthSource(resolved) {
         }
         return ext;
       }, 'getExtension');
+      var gse = proto.getSupportedExtensions;
+      if (gse && R.noise) patch(proto, 'getSupportedExtensions', function () {
+        var list = gse.apply(this, arguments);
+        if (!list || !list.length) return list;
+        // driver build differences reorder the list; a rotation is what a different version
+        // looks like, whereas a shuffle would contradict the reported limits
+        var off = Math.floor(seedPick('gl:ext') * list.length) % list.length;
+        return list.slice(off).concat(list.slice(0, off));
+      }, 'getSupportedExtensions');
     };
     if (window.WebGLRenderingContext) patchGL(WebGLRenderingContext.prototype);
     if (window.WebGL2RenderingContext) patchGL(WebGL2RenderingContext.prototype);
+  } catch (e) {}
+
+  // ── 5b. ClientRects: stable sub-pixel geometry jitter ────────────────────
+  // element geometry is a linking signal too (font metrics + zoom + DPI leave a signature),
+  // and real machines differ by fractions of a pixel. The jitter is cached per element, so
+  // repeated reads agree — a moving target is itself a tell.
+  try {
+    var rectCache = new WeakMap();
+    var jitterFor = function (el, r) {
+      if (!el || !r || (r.width === 0 && r.height === 0)) return null;
+      var hit = rectCache.get(el);
+      if (hit) return hit;
+      var h = seedPick('rect:' + (el.id || '') + ':' + el.tagName);
+      var h2 = seedPick('rect2:' + (el.id || '') + ':' + el.tagName);
+      hit = { dx: (h - 0.5) * 0.68, dy: (h2 - 0.5) * 0.68, dw: (h - 0.5) * 0.22, dh: (h2 - 0.5) * 0.22 };
+      try { rectCache.set(el, hit); } catch (e) {}
+      return hit;
+    };
+    var shift = function (r, j) {
+      try {
+        var Ctor = (typeof DOMRect === 'function') ? DOMRect : null;
+        if (Ctor) return new Ctor(r.x + j.dx, r.y + j.dy, r.width + j.dw, r.height + j.dh);
+      } catch (e) {}
+      return { x: r.x + j.dx, y: r.y + j.dy, width: r.width + j.dw, height: r.height + j.dh, top: r.top + j.dy, left: r.left + j.dx, right: r.right + j.dx, bottom: r.bottom + j.dy, toJSON: function () { return { x: this.x, y: this.y, width: this.width, height: this.height }; } };
+    };
+    var ebcr = Element.prototype.getBoundingClientRect;
+    patch(Element.prototype, 'getBoundingClientRect', function () {
+      var r = ebcr.apply(this, arguments);
+      if (!R.noise) return r;
+      var j = jitterFor(this, r);
+      return j ? shift(r, j) : r;
+    }, 'getBoundingClientRect');
+    var egcr = Element.prototype.getClientRects;
+    if (egcr) patch(Element.prototype, 'getClientRects', function () {
+      var list = egcr.apply(this, arguments);
+      if (!R.noise || !list || !list.length) return list;
+      try {
+        var out = [];
+        for (var i = 0; i < list.length; i++) { var j = jitterFor(this, list[i]); out.push(j ? shift(list[i], j) : list[i]); }
+        if (typeof DOMRectList === 'function') { try { return new DOMRectList(this, out); } catch (e2) {} }
+        out.item = function (k) { return this[k] || null; };
+        return out;
+      } catch (e) { return list; }
+    }, 'getClientRects');
   } catch (e) {}
 
   // ── 6. canvas fingerprint noise: stable per input, so repeat reads match ──
@@ -352,9 +505,25 @@ export function buildStealthSource(resolved) {
         var cached = fpCache.get(this);
         if (cached) return cached;
         var out = tdu.apply(this, arguments);
-        var ctx = this.getContext('2d');
+        var ctx = null;
+        var is2d = false;
+        try { ctx = this.getContext('2d'); is2d = !!ctx; } catch (e) {}
         try {
-          if (ctx && this.width * this.height <= 4e6) {
+          if (!is2d) {
+            // a WebGL/other canvas: snapshot it into a 2D canvas and perturb the PIXELS.
+            // Rendered-image hashes are the strongest GPU signal there is — patching the
+            // reported renderer string does nothing for them, so the pixels have to move.
+            if (R.noise && this.width * this.height <= 4e6) {
+              var c2 = document.createElement('canvas');
+              c2.width = this.width; c2.height = this.height;
+              var x2 = c2.getContext('2d');
+              x2.drawImage(this, 0, 0);
+              var d2 = gid.call(x2, 0, 0, c2.width, c2.height);
+              perturb(d2.data, 'gl:' + c2.width + 'x' + c2.height + (arguments[0] || ''));
+              x2.putImageData(d2, 0, 0);
+              out = tdu.call(c2, arguments[0], arguments[1]);
+            }
+          } else if (this.width * this.height <= 4e6) {
             var d = gid.call(ctx, 0, 0, this.width, this.height);
             perturb(d.data, 'tdu:' + this.width + 'x' + this.height + (arguments[0] || ''));
             ctx.putImageData(d, 0, 0);
