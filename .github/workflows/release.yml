@@ -14,9 +14,9 @@ jobs:
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
@@ -69,7 +69,8 @@ jobs:
           who=$(npm whoami 2>/dev/null || echo "")
           echo "publishing as: ${who:-<token rejected>}"
           if [ -z "$who" ]; then
-            echo "::warning::NPM_TOKEN was rejected — check it is valid and (for granular tokens) scoped to ${PACKAGE_NAME:-velox-automation}"
+            echo "::error::NPM_TOKEN was rejected by the registry — publish would E404. Fix the token at npmjs.com → Access Tokens (granular tokens must tick \"velox-automation\" or \"All packages\", Read and write, and \"Bypass two-factor authentication\"), then re-run this job. The GitHub Release already exists; publishing is idempotent (the version-exists check skips a double publish)."
+            exit 1
           fi
 
       - name: Publish to npm (with provenance)
