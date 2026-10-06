@@ -604,8 +604,11 @@ export class VeloxPage extends Emitter {
     return kind === 'element' ? new ElementHandle(this, result.objectId, result.description) : new JSHandle(this, result.objectId, result.description);
   }
 
-  /** Element handle for the first match of a selector. */
+  /** Element handle for the first match of a selector — null when nothing matches
+   *  (Playwright semantics; a dead JSHandle used to leak out for missing elements). */
   async elementHandle(sel) {
+    const found = await this.eval(`(function(){ if (typeof __vlx !== 'object') { ${ENGINE_SOURCE} } return !!__vlx.one(${JSON.stringify(sel)}) })()`).catch(() => false);
+    if (!found) return null;
     return this.evaluateHandle(`(function(){ if (typeof __vlx !== 'object') { ${ENGINE_SOURCE} } return __vlx.one(${JSON.stringify(sel)}) })()`);
   }
   async elementHandles(sel) {

@@ -31,7 +31,7 @@ jobs:
         run: |
           node -e "const p=require('./package.json'); const d={...p.dependencies,...p.devDependencies}; if(Object.keys(d).length){console.error('unexpected deps:',d);process.exit(1)} console.log('zero dependencies ✓')"
 
-      - name: Run test suite (450 checks)
+      - name: Run test suite (451 checks)
         run: npm test
 
       - name: CLI smoke

@@ -9,7 +9,7 @@ const DEMO = 'https://example.com';
 const s = await velox.open(DEMO, { executablePath: EXE });
 console.log('engine used:', s.engine);                 // 'lite' — example.com is static
 console.log('title:', await s.title());
-console.log('h1:', await s.text('h1'));
+console.log('p:', await s.text('p'));
 console.log('links:', (await s.links()).length);
 
 // ── 2. transparent escalation: browser-only ops upgrade automatically ───────
@@ -35,8 +35,8 @@ console.log('ua:', await p.eval('navigator.userAgent'));
 console.log('webdriver:', await p.eval('navigator.webdriver'));
 
 // ── 5. selectors: css / text= / xpath= / id= / tag= / >> shadow pierce ──────
-console.log('h1:', await p.text('h1'));
-console.log('by text:', await p.text('text=More information'));
+console.log('p:', await p.text('p'));
+console.log('by text:', await p.text('text=Learn more'));
 console.log('batch:', await p.extract('a', { text: true, attrs: ['href'] }));
 
 // ── 6. human-like input ──────────────────────────────────────────────────────
@@ -74,20 +74,20 @@ const p2 = await ctx.newPage();
 await p2.goto('/', { waitUntil: 'load' });
 
 // getBy* locators (in-page ARIA matching)
-const link = p2.getByRole('link', { name: 'More information' });
+const link = p2.getByRole('link', { name: 'Learn more' });
 console.log('getByRole link:', await link.attr('href'));
 
 // function-form evaluate + handles
 console.log('evaluate(fn):', await p2.evaluate((x) => x * 2, 21));
-const handle = await p2.elementHandle('h1');
-console.log('elementHandle text:', await handle.text());
+const handle = await p2.elementHandle('p');
+console.log('elementHandle text:', await handle?.text());   // null (not a dead handle) when nothing matches
 
 // APIRequestContext sharing the context jar
 const res = await ctx.request.get('/');
 console.log('context.request status:', res.status);
 
 // polling assertions
-await velox.expect(p2.getByRole('heading')).toHaveText('Example Domain');
+await velox.expect(p2.locator('p')).toHaveText('This domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.');
 
 // video → animated GIF (from-scratch encoder)
 await p2.video.start({ path: 'examples/video.gif', width: 480 });

@@ -158,6 +158,8 @@ await soft('elementHandle', async () => {
   check('handle boundingBox', box && box.width > 10);
   const kids = await p.elementHandles('li.item');
   check('elementHandles count', kids.length === 3);
+  const missing = await p.elementHandle('#no-such-element-anywhere');
+  check('elementHandle(missing) is null, not a dead handle', missing === null, String(missing));
   await h.dispose();
   return true;
 });

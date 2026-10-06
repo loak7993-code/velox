@@ -160,7 +160,7 @@ switch (cmd) {
     else if (flags.html) emit(await s.html(), flags.out);
     else if (flags.raw) emit(String(await s.html()), flags.out);
     else if (sel) emit((await s.extract(sel)).map((e) => e.text ?? JSON.stringify(e)).join('\n'), flags.out);
-    else emit(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`, flags.out);
+    else emit(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`, flags.out);   // markdown is the default (and --md) format
     if (!flags.quiet) {
       const bw = s.raw?.transferred?.();
       if (bw) console.error(`[bandwidth] profile=${bw.profile} transferred=${bw.human} blocked=${Object.values(bw.blocked || {}).reduce((a, b) => a + b, 0)} reqs`);

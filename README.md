@@ -3,7 +3,7 @@
 <img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
-[![tests](https://img.shields.io/badge/tests-450%20passing-brightgreen)](https://github.com/loak7993-code/velox/actions)
+[![tests](https://img.shields.io/badge/tests-451%20passing-brightgreen)](https://github.com/loak7993-code/velox/actions)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
 [![license](https://img.shields.io/badge/license-MIT-black)](LICENSE)
@@ -941,7 +941,7 @@ vlx bench  example.com                    # lite vs browser timings
 
 ## Testing
 
-450 checks across eleven suites, no CI browser downloads beyond a stock
+451 checks across eleven suites, no CI browser downloads beyond a stock
 chrome-headless-shell:
 
 ```bash
