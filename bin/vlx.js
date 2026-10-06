@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // vlx — the velox CLI
 import velox from '../src/index.js';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const [, , cmd, ...rest] = process.argv;
@@ -28,6 +28,7 @@ function parse(args) {
     else if (a === '--header') { const [k, v] = (args[++i] || '').split(/:(.*)/); out.headers[(k || '').trim()] = (v || '').trim(); }
     else if (a === '--proxy-auth') { const [u, p] = (args[++i] || '').split(':'); out.proxyAuth = { username: u, password: p || '' }; }
     else if (a === '--proxy-fallback') out.proxyFallback = true;
+    else if (a === '--quiet' || a === '-q') out.quiet = true;
     else if (a === '--retries' || a === '--config' || a === '--bandwidth' || a === '--max-bytes' || a === '--cache-dir' || a === '--cache-ttl') out[a.slice(2).replace(/-([a-z])/g, (m, ch) => ch.toUpperCase())] = args[++i];
     else if (a === '--cookie') out.cookies.push(args[++i]);
     else if (a.startsWith('-')) { /* ignore */ }
@@ -45,7 +46,7 @@ async function openOpts(flags) {
   const exe = process.env.VELOX_BROWSER;
   return {
     engine: flags.js ? 'cdp' : (flags.engine && engines.has(flags.engine) ? flags.engine : 'auto'),
-    executablePath: exe || undefined,
+    browser: flags.browser || undefined,
     stealth: flags.stealth, ads: flags.ads,
     headless: flags.headless !== false,
     ua: flags.ua, device: flags.device, locale: flags.locale, timezone: flags.tz,
@@ -54,8 +55,26 @@ async function openOpts(flags) {
     bandwidth: flags.bandwidth ? (/^\d+$/.test(flags.bandwidth) ? { maxBytes: +flags.bandwidth } : flags.bandwidth) : (flags.maxBytes ? { maxBytes: +flags.maxBytes } : undefined),
     headers: Object.keys(flags.headers).length ? flags.headers : undefined,
     timeout: flags.timeout ? +flags.timeout : undefined,
+    viewport: flags.viewport ? flags.viewport.split('x').map(Number) : undefined,
+    // `--load-session file.json` restores a saved session before navigation
+    ...(flags.loadSession ? { storageState: readSessionFile(flags.loadSession) } : {}),
   };
 }
+
+function readSessionFile(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')); }
+  catch (e) { die(`--load-session: cannot read ${file}: ${e.message}`); }
+}
+
+/** Write command output to a file (-o/--out) and tell the user what landed where. */
+function emit(text, out) {
+  const s = typeof text === 'string' ? text : JSON.stringify(text, null, 2);
+  if (!out) { console.log(s); return; }
+  mkdirSync(dirname(out), { recursive: true });
+  writeFileSync(out, s.endsWith('\n') || s.startsWith('{') ? s : s + '\n');
+  if (!flags_quiet) console.error(`→ ${out}  ${((s.length / 1024) || 0).toFixed(1)} KB`);
+}
+let flags_quiet = false;
 
 const HELP = `vlx — velox CLI. Browser automation at terminal velocity.
 
@@ -88,6 +107,7 @@ Options:
   --proxy-auth user:pass       proxy credentials (alternative to inline creds)
   --proxy-fallback             route an authenticated proxy through a local forwarder
                                (reliable where browsers mishandle CDP proxy auth)
+  --load-session <file>        restore a saved session (cookies + storage) before opening
   --retries <n>                retry transient failures n times
   --bandwidth full|lean|minimal|text-only   block resources you don't need (see README)
   --max-bytes <n>              abort response bodies larger than n bytes
@@ -101,7 +121,9 @@ Options:
   --timeout <ms>               overall timeout (default 20000)
   --full / --sel <s> / --fast  screenshot options
   --json / --html / --raw / --md   output format for open
-  -o, --out <file>             output file
+  -o, --out <file>             write output to a file (open, links, scrape, eval, cookies,
+                               shot, pdf)
+  -q, --quiet                  suppress the [bandwidth] status line
   --headed                     show the browser window`;
 
 switch (cmd) {
@@ -121,6 +143,7 @@ switch (cmd) {
   case 'open':
   case 'read': {
     const flags = parse(rest);
+    flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx open <url>');
     const cache = flags.cacheDir || flags.bandwidth ? velox.createCache({ dir: flags.cacheDir, ttl: flags.cacheTtl ? +flags.cacheTtl : 0 }) : null;
     const s = await velox.open(url, { ...(await openOpts(flags)), ...(cache ? { cache } : {}) }).catch((e) => die(e.message));
@@ -131,11 +154,13 @@ switch (cmd) {
     }
     if (flags.cookies.length) { const u = new URL(s.url); await s.setCookies?.(flags.cookies.map((c) => { const [name, value] = c.split('='); return { name, value, url: u.origin }; })).catch(() => {}); }
     const sel = flags.sel;
-    if (flags.json) console.log(JSON.stringify(sel ? await s.extract(sel) : { url: s.url, status: s.status, engine: s.engine, title: await s.title(), meta: await s.meta() }, null, 2));
-    else if (flags.html) console.log(await s.html());
-    else if (flags.raw) console.log(String(await s.html()));
-    else if (sel) console.log((await s.extract(sel)).map((e) => e.text ?? JSON.stringify(e)).join('\n'));
-    else console.log(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`);
+    // wait for a selector before reading (browser engine only — lite pages escalate)
+    if (flags.wait) await s.waitForSelector(flags.wait, { timeout: flags.timeout ? +flags.timeout : 10000 }).catch(() => {});
+    if (flags.json) emit(JSON.stringify(sel ? await s.extract(sel) : { url: s.url, status: s.status, engine: s.engine, title: await s.title(), meta: await s.meta() }, null, 2), flags.out);
+    else if (flags.html) emit(await s.html(), flags.out);
+    else if (flags.raw) emit(String(await s.html()), flags.out);
+    else if (sel) emit((await s.extract(sel)).map((e) => e.text ?? JSON.stringify(e)).join('\n'), flags.out);
+    else emit(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`, flags.out);
     if (!flags.quiet) {
       const bw = s.raw?.transferred?.();
       if (bw) console.error(`[bandwidth] profile=${bw.profile} transferred=${bw.human} blocked=${Object.values(bw.blocked || {}).reduce((a, b) => a + b, 0)} reqs`);
@@ -171,40 +196,43 @@ switch (cmd) {
 
   case 'links': {
     const flags = parse(rest);
+    flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx links <url>');
     const s = await velox.open(url, await openOpts(flags)).catch((e) => die(e.message));
     const links = await s.links();
-    if (flags.json) console.log(JSON.stringify(links, null, 2));
-    else links.forEach((l) => console.log(`${(l.text || '').trim().slice(0, 60).padEnd(62)} ${l.href}`));
+    if (flags.json) emit(JSON.stringify(links, null, 2), flags.out);
+    else emit(links.map((l) => `${(l.text || '').trim().slice(0, 60).padEnd(62)} ${l.href}`).join('\n'), flags.out);
     if (s.engine === 'cdp') await s.close().catch(() => {});
     break;
   }
 
   case 'scrape': {
     const flags = parse(rest);
+    flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx scrape <url> [--recipe all|links|images|text|tables|meta|jsonld]');
     const data = await velox.scrape(url, { recipe: flags.recipe || 'all', ...(await openOpts(flags)) }).catch((e) => die(e.message));
-    console.log(JSON.stringify(data, null, 2));
+    emit(JSON.stringify(data, null, 2), flags.out);
     break;
   }
 
   case 'eval': {
     const flags = parse(rest);
+    flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx eval <url> <expression>');
     const expr = flags._[1] || die('missing expression');
     const s = await velox.open(url, { ...(await openOpts(flags)), engine: 'cdp' }).catch((e) => die(e.message));
     const val = await s.eval(expr);
-    console.log(typeof val === 'object' ? JSON.stringify(val, null, 2) : val);
+    emit(typeof val === 'object' ? JSON.stringify(val, null, 2) : val, flags.out);
     await s.close().catch(() => {});
     break;
   }
 
   case 'cookies': {
     const flags = parse(rest);
+    flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx cookies <url>');
     const s = await velox.open(url, await openOpts(flags)).catch((e) => die(e.message));
-    const cookies = await s.cookies();
-    console.log(JSON.stringify(cookies, null, 2));
+    emit(JSON.stringify(await s.cookies(), null, 2), flags.out);
     if (s.engine === 'cdp') await s.close().catch(() => {});
     break;
   }

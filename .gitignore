@@ -8,3 +8,6 @@ examples/page.pdf
 .cdp-test/
 .site-url
 *.tgz
+velox-debug/
+shot.png
+page.pdf

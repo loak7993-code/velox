@@ -10,6 +10,7 @@
 //
 // What it cannot do: beat a hard block (IP reputation), solve an image CAPTCHA, or
 // forge a vendor sensor payload. Those are explicitly out of scope — see the docs.
+import { sleep } from './util.js';
 
 export const VENDORS = {
   cloudflare: {
@@ -52,8 +53,27 @@ export const VENDORS = {
 
 const html = (page) => page.content().catch(() => '');
 
-/** Which vendor is challenging this page right now? */
-export async function detect(page, { url } = {}) {
+/** Which vendor is challenging this page right now?
+ *
+ * Options: { url }            — evaluate against a specific URL's cookies
+ *          { wait, timeout, poll } — poll until a challenge appears (SPAs mount the
+ *                                    interstitial long after first paint; a bare
+ *                                    snapshot reads "no challenge" while one is
+ *                                    loading). Returns the last snapshot either way. */
+export async function detect(page, { url, wait = false, timeout = 20000, poll = 500 } = {}) {
+  const t0 = Date.now();
+  let info = await _detectOnce(page, { url });
+  if (wait && !info.challenged && !info.cleared) {
+    while (!info.challenged && !info.cleared && Date.now() - t0 < timeout) {
+      await sleep(poll);
+      info = await _detectOnce(page, { url });
+    }
+  }
+  if (wait) info.waited = Date.now() - t0;
+  return info;
+}
+
+async function _detectOnce(page, { url } = {}) {
   const signals = [];
   let body = '';
   try { body = await html(page); } catch {}

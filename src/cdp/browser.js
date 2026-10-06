@@ -338,6 +338,8 @@ export class Browser extends Emitter {
     // proxy credentials live on the browser so every page can answer 407 challenges
     if (effectiveProxy) b.proxy = normalizeProxy(effectiveProxy);
     if (stealth || defaultContext) { /* handled per-page */ }
+    // launch-level storage state applies to the default context (velox.config({storageState}) rides this too)
+    if (opts.storageState) await b.defaultContext().setStorageState(opts.storageState).catch(() => {});
     proc.once('exit', () => { b._closed = true; b.emit('disconnect'); });
     return b;
   }

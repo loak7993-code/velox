@@ -67,6 +67,8 @@ async function _browserPage(url, opts, jar) {
     viewport: opts.viewport, ua: opts.ua, locale: opts.locale, timezone: opts.timezone,
     geolocation: opts.geolocation, headers: opts.headers, routes: opts.routes,
     initScripts: opts.initScripts, dialogs: opts.dialogs,
+    // sessions carry over: velox.open(url, { storageState }) / velox.config({ storageState })
+    storageState: opts.storageState, httpCredentials: opts.httpCredentials,
   });
   if (jar) {
     const u = new URL(url);
@@ -87,6 +89,54 @@ class LiteLocator {
   html() { return Promise.resolve(this.s.doc.html(this.sel)); }
   exists() { return Promise.resolve(this.s.doc.select(this.sel) !== null); }
   count() { return Promise.resolve(this.s.doc.selectAll(this.sel).length); }
+}
+
+/**
+ * The full page surface, mirrored onto the session. Hand-listing every page method here
+ * rots (the facade used to miss ~100 of them — route/mock/har/frames/locator/events all
+ * silently absent). These names are wired in one place; new page methods just work.
+ */
+const SESSION_PAGE_METHODS = [
+  // navigation & waits
+  'reload', 'back', 'forward', 'wait', 'waitForLoad', 'waitForLoadState', 'waitForUrl',
+  'waitForSelector', 'waitForFunction', 'waitForRequest', 'waitForResponse', 'waitForRequestFinished',
+  'waitForEvent', 'waitForDialog', 'waitForPopup', 'waitForDownload', 'setDefaultTimeout',
+  // evaluation & handles
+  'eval', 'evaluate', 'evalSync', 'evaluateHandle', 'elementHandle', 'elementHandles', '$eval', '$$eval',
+  'batch', 'addSelectorEngine', 'warm',
+  // locator surface
+  'locator', 'getByRole', 'getByText', 'getByLabel', 'getByPlaceholder', 'getByAltText', 'getByTitle', 'getByTestId',
+  'exists', 'attrs', 'focus', 'dragAndDrop', 'scrollBy', 'scrollToBottom', 'setContent',
+  // frames
+  'inFrame', 'frameTree', 'mainFrame', 'frameLocator',
+  // emulation & environment
+  'setViewport', 'setUA', 'setHeaders', 'setLocale', 'setTimezone', 'setGeolocation', 'colorScheme',
+  'emulate', 'setOffline', 'emulateNetwork', 'emulateMedia', 'setViewportSize', 'bringToFront', 'activate',
+  // cookies & storage
+  'clearCookies', 'localStorage', 'restoreStorage', 'setLocalStorage',
+  'importSession', 'exportSession', 'importCurl', 'importHAR',
+  // network & interception
+  'requests', 'body', 'har', 'block', 'unblock', 'route', 'unroute', 'mock',
+  'transferred', 'blockedRequests', 'setBandwidth',
+  // scripts & bindings
+  'uploadFile', 'expose', 'addInitScript', 'removeInitScript', 'addScriptTag', 'addStyleTag',
+  // diagnostics & introspection
+  'console', 'errors', 'createCDPSession', 'frames',
+  // events (delegated to the page's emitter; handlers fire against page payloads)
+  'on', 'once', 'off', 'emit', 'waitForEvent',
+  // field helpers & bot-management
+  'detectChallenge', 'waitForCaptchaToken', 'netlog', 'debugDump', 'gotoWithRetry',
+  // actions (kept explicit so the return-value wrapping below applies)
+  'click', 'dblclick', 'hover', 'type', 'fill', 'press', 'screenshot', 'pdf',
+  'selectOption', 'selectText', 'check', 'uncheck', 'setChecked',
+];
+/** Page properties exposed as session accessors (live getters on the underlying page). */
+const SESSION_PAGE_ACCESSORS = ['human', 'challenge', 'mouse', 'keyboard', 'touch', 'video', 'clock', 'coverage', 'accessibility', 'ext'];
+
+/** Wrap a delegated call so a returned page object reads as the session, not the page. */
+function _wrap(session, result) {
+  if (result && typeof result.then === 'function') return result.then((v) => _wrap(session, v));
+  return result === session.page ? session : result;
 }
 
 export class LiteSession {
@@ -139,10 +189,11 @@ export class LiteSession {
   jsonld() { return this._live()?.jsonld() ?? this.doc.jsonld(); }
   cookies() { return this._live()?.cookies() ?? this.res.jar.toJSON(); }
 
-  /** Browser-only ops: escalate transparently. */
+  /** Browser-only ops: escalate transparently. The full page surface rides along. */
   _op(name, ...args) {
     return this.upgrade().then((b) => b[name](...args));
   }
+  goto(...a) { return this._op('goto', ...a); }
   click(...a) { return this._op('click', ...a); }
   hover(...a) { return this._op('hover', ...a); }
   type(...a) { return this._op('type', ...a); }
@@ -155,6 +206,8 @@ export class LiteSession {
   saveSession(...a) { return this._op('saveSession', ...a); }
   loadSession(...a) { return this._op('loadSession', ...a); }
   setCookies(...a) { return this._op('setCookies', ...a); }
+  // every remaining page method escalates too — attribute() etc. on the lite engine
+  // have no meaning without a browser, so route them through upgrade()
   async close() {
     if (this._upgraded) await this._upgraded.close().catch(() => {});
   }
@@ -165,8 +218,26 @@ export class BrowserSession {
     this.page = page; this.opts = opts || {};
     this.engine = 'cdp';
     this._fromLite = fromLite;
+    // mirror the full page surface — one wiring loop instead of 100 hand-kept aliases
+    for (const name of SESSION_PAGE_METHODS) {
+      if (typeof this[name] === 'function' || !(typeof page[name] === 'function')) continue;
+      this[name] = (...args) => _wrap(this, this.page[name](...args));
+    }
   }
   get url() { return this.page._url; }
+  get status() { return this.page._docResponse?.status ?? this._lastNav?.status ?? null; }
+  /** Accessors delegate live: session.human.* / session.challenge.* / session.mouse.* … */
+  get human() { return this.page.human; }
+  get challenge() { return this.page.challenge; }
+  get mouse() { return this.page.mouse; }
+  get keyboard() { return this.page.keyboard; }
+  get touch() { return this.page.touch; }
+  get video() { return this.page.video; }
+  get clock() { return this.page.clock; }
+  get coverage() { return this.page.coverage; }
+  get accessibility() { return this.page.accessibility; }
+  get ext() { return this.page.ext; }
+  get raw() { return this.page; }
   async goto(url, o) { const r = await this.page.goto(url, o); this._lastNav = r; return r; }
   async title() { return this.page.title(); }
   async html() { return this.page.content(); }
@@ -190,22 +261,20 @@ export class BrowserSession {
   count(sel) { return this.page.count(sel); }
   attr(sel, name) { return this.page.attr(sel, name); }
   val(sel) { return this.page.val(sel); }
-  waitForFunction(...a) { return this.page.waitForFunction(...a); }
-  waitForUrl(...a) { return this.page.waitForUrl(...a); }
-  click(...a) { return this.page.click(...a); }
-  hover(...a) { return this.page.hover(...a); }
-  type(...a) { return this.page.type(...a); }
-  fill(...a) { return this.page.fill(...a); }
-  press(...a) { return this.page.press(...a); }
-  screenshot(...a) { return this.page.screenshot(...a); }
-  pdf(...a) { return this.page.pdf(...a); }
-  eval(...a) { return this.page.eval(...a); }
-  waitForSelector(...a) { return this.page.waitForSelector(...a); }
-  waitForLoad(...a) { return this.page.waitForLoad(...a); }
-  get status() { return this.page._docResponse?.status ?? this._lastNav?.status ?? null; }
-  /** Underlying page for full API access. */
-  get raw() { return this.page; }
+  isClosed() { return this.page.isClosed; }
   async close() { await this.page.browser.close(); }
+}
+
+/** LiteSession gains the escalatable page surface (constructed here to avoid cycles). */
+for (const name of SESSION_PAGE_METHODS) {
+  if (LiteSession.prototype[name]) continue;         // explicit methods above win
+  LiteSession.prototype[name] = function (...args) { return this._op(name, ...args); };
+}
+
+/** LiteSession gains the escalatable page surface (constructed here to avoid cycles). */
+for (const name of SESSION_PAGE_METHODS) {
+  if (LiteSession.prototype[name]) continue;         // explicit methods above win
+  LiteSession.prototype[name] = function (...args) { return this._op(name, ...args); };
 }
 
 /** One-shot structured scrape. Recipes: text | links | images | tables | meta | jsonld | all */

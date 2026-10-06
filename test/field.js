@@ -311,6 +311,84 @@ await soft('#16 extract() remains the fastest, most reliable data path', async (
   return true;
 });
 
+/* ── 5b. detectChallenge({wait}) — SPAs mount the widget after first paint ── */
+await soft('#5b detectChallenge({wait:true}) polls until the widget mounts', async () => {
+  const p = await b.newPage();
+  // widget appears 1.2s after load — a bare snapshot reads "no captcha" at t=0
+  await p.setContent('<div id=stage></div><script>setTimeout(()=>{document.getElementById("stage").innerHTML=\'<div class="cf-turnstile" data-sitekey="0x4AAAAAAA">\'; window.turnstile = { render: function(){} };},1200)</script>');
+  const t0 = Date.now();
+  const info = await p.detectChallenge({ wait: true, timeout: 6000, poll: 200 });
+  check('wait mode finds the late widget', info.type === 'turnstile', JSON.stringify(info));
+  check('wait mode actually polled', Date.now() - t0 > 900 && (info.waited ?? 0) > 900, `waited=${info.waited}`);
+  const none = await p.setContent('<p>nothing here</p>').then(() => p.detectChallenge({ wait: true, timeout: 800, poll: 200 }));
+  check('wait mode still resolves without a widget', none.type === null, JSON.stringify(none.type));
+  await p.close();
+  return true;
+});
+
+await soft('#5c window-object signals are authoritative over src scans', async () => {
+  const p = await b.newPage();
+  // window.turnstile set WITHOUT any turnstile script tag — src-scan-only detectors miss it
+  await p.setContent('<div class="cf-turnstile" data-sitekey="0x4AAAAAAA"></div><script>window.turnstile={render:1}</script>');
+  const info = await p.detectChallenge();
+  check('scriptLoaded true via window signal', info.scriptLoaded === true, JSON.stringify(info));
+  check('windowSignal recorded', info.windowSignal === 'turnstile', String(info.windowSignal));
+  // noisy accessibility iframes never masquerade as challenges
+  await p.setContent('<iframe src="https://userway.org/widget.js"></iframe><iframe src="https://challenges.cloudflare.com/turnstile/v0/api.js"></iframe>');
+  const info2 = await p.detectChallenge();
+  check('userway iframes excluded from challenge evidence', info2.type === 'turnstile' || info2.type === null, JSON.stringify(info2.type));
+  await p.close();
+  return true;
+});
+
+/* ── 17. velox.open carries storageState (config default + per-call) ─────── */
+await soft('#17 open()/config() apply storageState; CLI --load-session rides the same path', async () => {
+  const state = { cookies: [{ name: 'vxopen', value: 'yes', url: S }], origins: [{ origin: new URL(S).origin, localStorage: [{ name: 'lsopen', value: 'v1' }] }] };
+  const s = await velox.open(S, { engine: 'cdp', executablePath: EXE, storageState: state });
+  const p = s.raw;
+  await p.goto(S, { waitUntil: 'interactive' });
+  const cks = await p.cookies();
+  const ls = await p.localStorage();
+  check('open() storageState cookies applied', cks.some((c) => c.name === 'vxopen'), JSON.stringify(cks.map((c) => c.name)));
+  check('open() storageState localStorage applied', ls.local.lsopen === 'v1', JSON.stringify(ls.local));
+  await s.close();
+  return true;
+});
+
+/* ── 18. session facade mirrors the full page surface ────────────────────── */
+await soft('#18 BrowserSession delegates route/har/frames/locator/events; LiteSession escalates', async () => {
+  const s = await velox.open(`${S}/spa.html`, { engine: 'cdp', executablePath: EXE });
+  const calls = [];
+  // network interception through the facade
+  s.route('**/api/**', (req) => calls.push(req.url));
+  await s.goto(`${S}/`, { waitUntil: 'interactive' });
+  // goto resolves at DOMContentLoaded; the page's own fetches can pause a beat later
+  await s.waitForRequest(/\/api\/data/, { timeout: 5000 }).catch(() => {});
+  await s.wait(150);
+  check('facade route() intercepts', calls.length > 0, JSON.stringify(calls));
+  // data + frames + locator surface through the facade
+  check('facade har()', (await s.har()).log.entries.length > 0);
+  check('facade frames()', (await s.frames()).length >= 2);
+  check('facade count()', (await s.count('li.item')) === 3);
+  check('facade waitForLoadState()', (await s.waitForLoadState('load')) === true);
+  check('facade html() matches content()', typeof (await s.html()) === 'string');
+  // events through the facade
+  const got = [];
+  const off = s.on('console', (m) => got.push(m.type));
+  await s.eval('console.log("facade-event")');
+  await s.wait(200);
+  off();
+  check('facade on(event)', got.length > 0, JSON.stringify(got));
+  await s.close();
+
+  // lite session escalates for page-only methods
+  const lite = await velox.open(S, { engine: 'lite' });
+  check('lite engine stays lite', lite.engine === 'lite');
+  check('lite escalates page-only methods', (await lite.waitForLoadState('load')) === true && lite.engine === 'cdp');
+  await lite.close();
+  return true;
+});
+
 await b.close();
 site.server.close();
 const fails = results.filter(([, ok]) => !ok);

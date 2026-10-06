@@ -3,8 +3,7 @@
 <img src="https://raw.githubusercontent.com/loak7993-code/velox/main/assets/banner.png" alt="velox — browser automation at terminal velocity" width="900">
 
 [![npm](https://img.shields.io/npm/v/velox-automation?label=npm&color=cb3837)](https://www.npmjs.com/package/velox-automation)
-[![tests](https://img.shields.io/badge/tests-302%2F302-brightgreen)](https://github.com/loak7993-code/velox/actions)
-[![tests](https://img.shields.io/badge/tests-146%2F146-brightgreen)](#testing)
+[![tests](https://img.shields.io/badge/tests-450%20passing-brightgreen)](https://github.com/loak7993-code/velox/actions)
 [![dependencies](https://img.shields.io/badge/dependencies-0-blue)](#why-velox-exists)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-green)](#installation)
 [![license](https://img.shields.io/badge/license-MIT-black)](LICENSE)
@@ -578,6 +577,12 @@ const w = await page.detectChallenge();
 // { type: 'turnstile', sitekey: '0x4AAA…', iframeUrl: 'https://challenges.cloudflare.com/…',
 //   containerId: 'turnstile_container_6243920994991472', visible: true, tokenPresent: false }
 
+// SPAs hydrate the widget seconds after first paint — a bare snapshot then reads "no
+// captcha here" on a page that has one. { wait: true } polls until the widget mounts:
+const w2 = await page.detectChallenge({ wait: true, timeout: 20000 });
+// window-object signals are authoritative (window.turnstile cannot lie; a src scan can),
+// and known accessibility-overlay iframes (userway etc.) are never mistaken for challenges.
+
 // responses with bodies, and a filtered network log
 const resp = await page.waitForResponse(/checkout\/.*\/pay/);
 const json = await resp.json();                       // .text() / .body() / .status / .headers
@@ -601,6 +606,8 @@ whose domain lacks the leading dot (`amazon.com`), which then never matches
 
 ```js
 velox.importSession(cookieArray);                  // or a curl header, or a HAR file
+const s = await velox.open(url, { storageState: 'state.json' });  // restored before navigation
+velox.config({ storageState: 'state.json' });      // …or as a global default
 await velox.fetch(...) → browser takes over:
 const page = await b.newPage();                    // the pending session lands on first navigation
 await page.importSession(cookies);                 // or explicitly, on a live page
@@ -864,6 +871,7 @@ vlx bench  example.com                    # lite vs browser timings
 --device iphone_15 · --ua · --locale · --tz · --proxy socks5://…
 --header "K: V" · --cookie "a=b" · --viewport 1920x1080
 --wait SEL · --timeout ms · --headed
+--load-session s.json · --quiet · -o FILE (open/links/scrape/eval/cookies/shot/pdf)
 ```
 
 ---
@@ -933,11 +941,12 @@ vlx bench  example.com                    # lite vs browser timings
 
 ## Testing
 
-146 checks across four suites, no CI browser downloads beyond a stock
+450 checks across eleven suites, no CI browser downloads beyond a stock
 chrome-headless-shell:
 
 ```bash
-npm test          # smoke (37) · lite+auto (27) · pool · playwright parity (82)
+npm test          # launch · proxies · bandwidth · plugins · stealth+challenges ·
+                  # field helpers · accounts · smoke · lite+auto · pool · playwright parity
 npm run bench     # head-to-head vs playwright-core, same binary
 node examples/tour.mjs
 ```

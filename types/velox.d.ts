@@ -82,6 +82,32 @@ declare module 'velox' {
   /** dialogs (page.on('dialog')) */
   export interface DialogEvent { type: string; message: string; url?: string; defaultPrompt?: string; respond(accept?: boolean, promptText?: string): Promise<void>; }
 
+  /** Page event names. Handlers receive the payload shown in PageEventPayloads. */
+  export type PageEvent =
+    | 'console' | 'pageerror' | 'dialog' | 'request' | 'response' | 'requestfinished'
+    | 'download' | 'filechooser' | 'websocket' | 'worker' | 'serviceworker' | 'frame'
+    | 'popup' | 'crash' | 'close' | 'screencastframe' | '*';
+
+  /** Typed payloads for page events. */
+  export interface PageEventPayloads {
+    console: ConsoleMessage;
+    pageerror: PageErrorEvent;
+    dialog: DialogEvent;
+    request: RequestEntry;
+    response: RequestEntry;
+    requestfinished: RequestEntry;
+    download: Download;
+    filechooser: { element: ElementHandle | null; multiple: boolean };
+    websocket: WebSocketTracker;
+    worker: any;
+    serviceworker: any;
+    frame: any;
+    popup: VeloxPage;
+    crash: void;
+    close: void;
+    '*': [string, ...any[]];
+  }
+
   /** what waitForResponse()/netlog() hand back — bodies are one await away */
   export interface ResponseView {
     url: string;
@@ -364,6 +390,61 @@ declare module 'velox' {
     upgrade(): Promise<Session>;
     close(): Promise<void>;
     raw?: VeloxPage;
+    /** The full VeloxPage surface is mirrored on cdp sessions (and escalates from lite). */
+    goto(url: string, opts?: GotoOptions): Promise<any>;
+    reload(o?: GotoOptions): Promise<any>;
+    back(): Promise<boolean>;
+    forward(): Promise<boolean>;
+    wait(ms: number): Promise<void>;
+    waitForLoad(state?: string, timeout?: number): Promise<boolean>;
+    waitForLoadState(state?: string, timeout?: number): Promise<boolean>;
+    waitForUrl(match: string | RegExp, timeout?: number): Promise<string>;
+    waitForFunction(js: string, opts?: { timeout?: number }): Promise<any>;
+    count(sel: string): Promise<number>;
+    attr(sel: string, name: string): Promise<string | null>;
+    val(sel: string): Promise<string | null>;
+    locator(sel: string): Locator;
+    getByRole(role: string, o?: any): Locator;
+    getByText(text: string, o?: { exact?: boolean }): Locator;
+    getByLabel(text: string, o?: { exact?: boolean }): Locator;
+    getByTestId(id: string): Locator;
+    har(opts?: { withBodies?: boolean }): Promise<any>;
+    requests(o?: { filter?: (r: RequestEntry) => boolean }): RequestEntry[];
+    body(entryOrId: RequestEntry | string): Promise<string | null>;
+    route(pattern: string | RegExp, handler: (req: RouteRequest) => void): any;
+    unroute(pattern: string | RegExp): any;
+    mock(urlPattern: string, response: any): any;
+    block(urls: string | string[]): Promise<any>;
+    unblock(): Promise<any>;
+    frames(): Promise<any[]>;
+    frameLocator(sel: string): any;
+    setContent(html: string, opts?: { timeout?: number }): Promise<any>;
+    setViewport(w: number, h: number, o?: { mobile?: boolean; dsf?: number }): Promise<any>;
+    setUA(ua: string, platform?: string): Promise<any>;
+    setHeaders(headers: Record<string, string>): Promise<any>;
+    setCookies(cookies: CookieEntry[]): Promise<any>;
+    clearCookies(): Promise<any>;
+    importSession(input: CookieEntry[] | string, o?: any): Promise<{ imported: number }>;
+    exportSession(): Promise<any>;
+    importCurl(header: string, o?: { domain?: string }): Promise<{ imported: number }>;
+    importHAR(file: string, o?: { urlFilter?: string | RegExp }): Promise<{ imported: number }>;
+    netlog(filter?: string | RegExp | ((e: RequestEntry) => boolean)): ResponseView[];
+    detectChallenge(o?: { wait?: boolean; timeout?: number; poll?: number }): Promise<ChallengeWidget>;
+    waitForCaptchaToken(selector?: string | null, o?: CaptchaTokenOptions): Promise<string>;
+    gotoWithRetry(url: string, o?: any): Promise<any>;
+    debugDump(dir?: string, o?: { fullPage?: boolean }): Promise<DebugDumpResult>;
+    cdp(method: string, params?: Record<string, any>): Promise<any>;
+    on<E extends PageEvent>(event: E, handler: (payload: PageEventPayloads[E]) => void): () => void;
+    on(event: string, handler: (...args: any[]) => void): () => void;
+    once<E extends PageEvent>(event: E, handler: (payload: PageEventPayloads[E]) => void): () => void;
+    once(event: string, handler: (...args: any[]) => void): () => void;
+    waitForEvent(name: string, o?: { predicate?: (p: any) => boolean; timeout?: number }): Promise<any>;
+    human: HumanBehaviour;
+    challenge: VeloxPage['challenge'];
+    mouse: VeloxPage['mouse'];
+    keyboard: VeloxPage['keyboard'];
+    isClosed(): boolean;
+    [key: string]: any;   // anything else mirrors the page (and escalates from lite)
   }
 
   export interface VeloxPage extends Session {
@@ -439,7 +520,7 @@ declare module 'velox' {
     /** Free namespace for your own extensions. */
     ext: Record<string, any>;
     /** Wait for a captcha token field to populate; on timeout says WHICH state it died in. */
-    waitForCaptchaToken(selector?: string, o?: CaptchaTokenOptions): Promise<string>;
+    waitForCaptchaToken(selector?: string | null, o?: CaptchaTokenOptions): Promise<string>;
     /** Structured info about the anti-bot widget on the page (prefix-matches dynamic container ids). */
     detectChallenge(): Promise<ChallengeWidget>;
     /** Filtered network log with lazy bodies: page.netlog(/checkout|auth/) */
@@ -513,7 +594,10 @@ declare module 'velox' {
     errors(): any[];
     activate(): Promise<VeloxPage>;
     close(): Promise<void>;
+    on<E extends PageEvent>(event: E, handler: (payload: PageEventPayloads[E]) => void): () => void;
     on(event: string, handler: (...args: any[]) => void): () => void;
+    once<E extends PageEvent>(event: E, handler: (payload: PageEventPayloads[E]) => void): () => void;
+    once(event: string, handler: (...args: any[]) => void): () => void;
     isClosed: boolean;
   }
 
@@ -667,6 +751,10 @@ declare module 'velox' {
   export const DEVICES: Record<string, Device>;
 
   export interface OpenOptions extends PageOptions, VeloxFetchOptions {
+    /** Playwright-format storage state (cookies + origins) applied before navigation. */
+    storageState?: string | { cookies?: CookieEntry[]; origins?: { origin: string; localStorage?: { name: string; value: string }[] }[] };
+    /** HTTP basic-auth credentials for the target site. */
+    httpCredentials?: { username: string; password: string };
     engine?: 'auto' | 'lite' | 'cdp';
     headless?: boolean;
     executablePath?: string;
