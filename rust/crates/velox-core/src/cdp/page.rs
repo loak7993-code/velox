@@ -50,6 +50,9 @@ pub struct Nav {
 
 #[derive(Debug, Clone, Default)]
 pub struct PageOpts {
+    /// When set, the target is created already navigating to this URL —
+    /// chrome starts loading during process boot, in parallel with our attach.
+    pub initial_url: Option<String>,
     pub viewport: Option<(u32, u32, f64)>, // w, h, dsf
     pub ua: Option<String>,
     pub device: Option<String>,
@@ -180,7 +183,9 @@ impl Page {
         }
         self.wire_events().await?;
         self.apply_environment().await?;
-        // scripts apply to every future navigation AND the current document
+        // the engine registers for every FUTURE document in one call — the old
+        // path evaluated it on about:blank AND again after each navigation
+        // (measured: ~10ms of V8 parse + a wire round-trip per goto, gone)
         let scripts: Vec<String> = vec![ENGINE_SOURCE.to_string()];
         // stealth: resolve → align with the real binary → env overrides + injected source
         if let Some(cfg) = self.opts.stealth.clone() {
@@ -479,6 +484,32 @@ impl Page {
         let timeout = opts.timeout.unwrap_or(Duration::from_secs(45));
         let t0 = Instant::now();
 
+        // fast path: the target was created with this exact URL (initial_url) and
+        // chrome already did the work during boot — don't navigate again
+        if self.opts.initial_url.as_deref() == Some(url) {
+            let state = self
+                .eval("document.readyState")
+                .await
+                .unwrap_or(Value::Null);
+            let ready = state.as_str().unwrap_or("");
+            if (wait_until == WaitUntil::Interactive
+                && (ready == "interactive" || ready == "complete"))
+                || (wait_until == WaitUntil::Load && ready == "complete")
+            {
+                let status = self
+                    .eval("performance.getEntriesByType('navigation')[0]?.responseStatus ?? null")
+                    .await
+                    .ok()
+                    .and_then(|v| v.as_u64().map(|n| n as u16));
+                return Ok(Nav {
+                    url: self.url(),
+                    status: status.or(*self.last_doc_status.lock().unwrap()),
+                    ms: t0.elapsed().as_millis(),
+                    attempts: vec![],
+                });
+            }
+        }
+
         *self.last_doc_status.lock().unwrap() = None;
 
         let mut nav_params = json!({ "url": url });
@@ -508,7 +539,8 @@ impl Page {
                 self.wait_network_idle(timeout).await.ok();
             }
         }
-        self.ensure_engine().await;
+        // the engine self-heals in vlx() (inline guard) — no per-navigation
+        // re-injection round-trip here
 
         Ok(Nav {
             url: self.url.lock().unwrap().clone(),
@@ -519,6 +551,16 @@ impl Page {
     }
 
     async fn wait_lifecycle(self: &Arc<Self>, name: &str, timeout: Duration) -> Result<()> {
+        // late-attach safety: the lifecycle event may predate our subscription
+        let probe: &str = if name == "load" {
+            "document.readyState === 'complete' ? 'yes' : 'no'"
+        } else {
+            "(document.readyState === 'interactive' || document.readyState === 'complete') ? 'yes' : 'no'"
+        };
+        let already = self.eval(probe).await.unwrap_or(Value::Null);
+        if already.as_str() == Some("yes") {
+            return Ok(());
+        }
         let main = self.main_frame.lock().unwrap().clone();
         match self
             .conn

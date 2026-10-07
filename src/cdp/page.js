@@ -476,6 +476,7 @@ export class VeloxPage extends Emitter {
         if (re.test(this._url)) { clearInterval(iv); resolve(this._url); }
         else if (Date.now() - t0 > timeout) { clearInterval(iv); reject(new TimeoutError(`waitForUrl ${match}`, timeout)); }
       }, 60);
+      iv.unref?.(); // polling must not hold the event loop once resolved
     });
   }
 

@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 // vlx — the velox CLI
+
+// Node ≥22.1: persist the V8 compile cache between runs — cuts the module-graph
+// import cost of every subsequent invocation (measured ~30% on cold FS).
+try { (await import('node:module')).enableCompileCache?.(); } catch {}
+
 import velox from '../src/index.js';
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const [, , cmd, ...rest] = process.argv;
+if (process.env.VLX_T) {
+  globalThis.__T0 = performance.now();
+  process.on('exit', () => console.error(`[t] process exit at: ${Math.round(performance.now() - globalThis.__T0)}ms`));
+}
 
 function parse(args) {
   const out = { _: [], headers: {}, cookies: [] };
@@ -44,7 +53,7 @@ const engines = new Set(['auto', 'lite', 'cdp']);
 
 async function openOpts(flags) {
   const exe = process.env.VELOX_BROWSER;
-  return {
+  const __o = {
     engine: flags.js ? 'cdp' : (flags.engine && engines.has(flags.engine) ? flags.engine : 'auto'),
     browser: flags.browser || undefined,
     stealth: flags.stealth, ads: flags.ads,
@@ -59,6 +68,8 @@ async function openOpts(flags) {
     // `--load-session file.json` restores a saved session before navigation
     ...(flags.loadSession ? { storageState: readSessionFile(flags.loadSession) } : {}),
   };
+  if (process.env.VLX_T) console.error('[t] openOpts:', JSON.stringify(__o));
+  return __o;
 }
 
 function readSessionFile(file) {
@@ -146,7 +157,10 @@ switch (cmd) {
     flags_quiet = !!flags.quiet;
     const url = flags._[0] || die('usage: vlx open <url>');
     const cache = flags.cacheDir || flags.bandwidth ? velox.createCache({ dir: flags.cacheDir, ttl: flags.cacheTtl ? +flags.cacheTtl : 0 }) : null;
+    const __t = (l, t0) => process.env.VLX_T && console.error(`[t] ${l}: ${Math.round(performance.now() - t0)}ms`);
+    let __t0 = performance.now();
     const s = await velox.open(url, { ...(await openOpts(flags)), ...(cache ? { cache } : {}) }).catch((e) => die(e.message));
+    __t('open', __t0);
     if (cache && flags.json) console.error(`cache: ${JSON.stringify(cache.stats)}`);
     if (process.env.VLX_DEBUG) {
       console.error('[dbg] engine:', s.engine, '| url:', s.url, '| exe:', process.env.VELOX_BROWSER || 'auto');
@@ -155,18 +169,24 @@ switch (cmd) {
     if (flags.cookies.length) { const u = new URL(s.url); await s.setCookies?.(flags.cookies.map((c) => { const [name, value] = c.split('='); return { name, value, url: u.origin }; })).catch(() => {}); }
     const sel = flags.sel;
     // wait for a selector before reading (browser engine only — lite pages escalate)
+    __t0 = performance.now();
     if (flags.wait) await s.waitForSelector(flags.wait, { timeout: flags.timeout ? +flags.timeout : 10000 }).catch(() => {});
+    __t('wait', __t0);
+    __t0 = performance.now();
     if (flags.json) emit(JSON.stringify(sel ? await s.extract(sel) : { url: s.url, status: s.status, engine: s.engine, title: await s.title(), meta: await s.meta() }, null, 2), flags.out);
     else if (flags.html) emit(await s.html(), flags.out);
     else if (flags.raw) emit(String(await s.html()), flags.out);
     else if (sel) emit((await s.extract(sel)).map((e) => e.text ?? JSON.stringify(e)).join('\n'), flags.out);
     else emit(`# ${(await s.title()) || s.url}\n\n${await s.readable()}`, flags.out);   // markdown is the default (and --md) format
+    __t('render', __t0);
     if (!flags.quiet) {
       const bw = s.raw?.transferred?.();
       if (bw) console.error(`[bandwidth] profile=${bw.profile} transferred=${bw.human} blocked=${Object.values(bw.blocked || {}).reduce((a, b) => a + b, 0)} reqs`);
       else if (cache) console.error(`[bandwidth] cached=${cache.stats.revalidated} saved=${velox.fmtBytes(cache.stats.bytesSaved)}`);
     }
+    __t0 = performance.now();
     await s.close?.().catch(() => {});
+    __t('close', __t0);
     break;
   }
 
@@ -177,8 +197,12 @@ switch (cmd) {
     const s = await velox.open(url, { ...(await openOpts(flags)), engine: flags.engine === 'lite' ? 'auto' : 'cdp' }).catch((e) => die(e.message));
     if (flags.viewport) { const [w, h] = flags.viewport.split('x').map(Number); await s.raw.setViewport(w, h); }
     if (flags.wait) await s.waitForSelector(flags.wait, { timeout: flags.timeout ? +flags.timeout : 10000 }).catch(() => {});
+    let __t0 = performance.now();
     const buf = await s.screenshot({ path: out, full: !!flags.full, ...(flags.sel ? { selector: flags.sel } : {}), ...(flags.fast ? { fast: true } : {}) });
+    if (process.env.VLX_T) console.error(`[t] shot: ${Math.round(performance.now() - __t0)}ms`);
+    __t0 = performance.now();
     if (s.engine === 'cdp') await s.close().catch(() => {});
+    if (process.env.VLX_T) console.error(`[t] close: ${Math.round(performance.now() - __t0)}ms`);
     console.log(`${out}  ${(buf.length / 1024).toFixed(1)} KB`);
     break;
   }

@@ -56,7 +56,7 @@ export async function open(url, opts = {}) {
 
 async function _browserPage(url, opts, jar) {
   const browser = opts.browser || await Browser.launch({
-    browser: opts.browserName || 'auto',
+    browser: opts.browserName, // undefined → VELOX_BROWSER env → discovery (in that order)
     headless: opts.headless !== false,
     executablePath: opts.executablePath,
     proxy: opts.proxy,

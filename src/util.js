@@ -11,6 +11,7 @@ export function withTimeout(promise, ms_, what = 'operation') {
   if (ms_ == null || ms_ <= 0 || ms_ === Infinity) return promise;
   let t;
   const timeout = new Promise((_, rej) => { t = setTimeout(() => rej(new TimeoutError(what, ms_)), ms_); });
+  t.unref?.(); // a won race must not leave the timer holding the event loop
   return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
 }
 

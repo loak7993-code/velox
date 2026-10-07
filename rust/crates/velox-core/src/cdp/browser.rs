@@ -159,8 +159,14 @@ impl Browser {
         opts: super::page::PageOpts,
     ) -> Result<Arc<super::page::Page>> {
         // PUT /json/new (Chrome 111+); fall back to GET for older builds.
+        // With `initial_url` the target is created already navigating — chrome
+        // starts the load during boot, in parallel with our attach.
         let target = {
-            let url = format!("{}/json/new?about:blank", self.http_base());
+            let first = opts
+                .initial_url
+                .clone()
+                .unwrap_or_else(|| "about:blank".into());
+            let url = format!("{}/json/new?{}", self.http_base(), urlencode(&first));
             let mut res = self
                 .http
                 .put(&url)
@@ -271,6 +277,15 @@ fn nix_root() -> bool {
 fn looks_like_chrome(exe: &str) -> bool {
     // chrome-headless-shell always runs headless; full browsers need the switch
     !exe.contains("headless-shell")
+}
+
+/// Query-encode for /json/new?url=… (chrome wants the raw url here).
+fn urlencode(u: &str) -> String {
+    url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("x", u)
+        .finish()
+        .trim_start_matches("x=")
+        .to_string()
 }
 
 fn mkdtemp_profile() -> String {

@@ -98,15 +98,18 @@ Same test site, same binary, medians of 5 (see `bench.sh`):
 
 | operation | JS `vlx` | `vlx-rs` | |
 |---|---|---|---|
-| open (auto → lite) | 122 ms | **23 ms** | 5.3× |
-| open (`--engine cdp`) | 5157 ms | **138 ms** | 37× |
-| eval `document.title` | 5195 ms | **131 ms** | 40× |
-| shot (full) | 5219 ms | **214 ms** | 24× |
-| links | 125 ms | **22 ms** | 5.7× |
+| open (auto → lite) | 126 ms | **22 ms** | 5.7× |
+| open (`--engine cdp`) | 269 ms | **153 ms** | 1.8× |
+| eval `document.title` | 264 ms | **153 ms** | 1.7× |
+| shot (full) | 784 ms | **232 ms** | 3.4× |
+| links | 126 ms | **22 ms** | 5.7× |
 
-The browser path wins big because the JS CLI pays Node's full module-graph
-import cost (~5 s) before the first CDP message; the Rust binary starts in
-milliseconds and the CDP driver itself is comparable.
+After the JS-side fixes (fs-scan discovery without 21 process spawns,
+`'auto'` respecting `VELOX_BROWSER`, `unref`'d race timers that used to hold
+the process open for seconds after a 26 ms close), the JS CLI's browser path
+dropped from ~5.2 s to ~270 ms. The remaining Rust edge: a native binary with
+no module graph, plus the target-create fast path (`/json/new?url=…` starts
+the load during chrome boot, in parallel with the attach).
 
 ## Architecture
 

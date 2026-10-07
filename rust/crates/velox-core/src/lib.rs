@@ -55,8 +55,9 @@ impl OpenOpts {
             max_redirects: 10,
         }
     }
-    pub fn page_opts(&self) -> cdp::page::PageOpts {
+    pub fn page_opts(&self, initial_url: Option<&str>) -> cdp::page::PageOpts {
         cdp::page::PageOpts {
+            initial_url: initial_url.map(|u| u.to_string()),
             viewport: self.viewport,
             ua: self.user_agent.clone(),
             device: self.device.clone(),
@@ -472,7 +473,7 @@ impl CdpSession {
         lite: Option<&LiteSession>,
     ) -> Result<CdpSession> {
         let mut browser = Box::new(Browser::launch(opts.launch_opts()).await?);
-        let page = browser.new_page(opts.page_opts()).await?;
+        let page = browser.new_page(opts.page_opts(None)).await?;
         // replay cookies harvested by the lite fetch (set-cookie headers)
         if let Some(l) = lite {
             let cookies = cookies_from_headers(&l.res.url, &l.res.headers);

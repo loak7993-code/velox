@@ -423,7 +423,12 @@ export class Browser extends Emitter {
       // Behind target: start (or join) a refill and wait for it — a spare lands faster
       // than building a page cold, and page creation must never block indefinitely.
       const refill = this._sparePromise || this._topUpSpares();
-      if (refill) await Promise.race([refill.catch(() => {}), new Promise((r) => setTimeout(r, opts.spareWait ?? 80))]);
+      if (refill) {
+        let unrefSpare;
+        const spareTimer = new Promise((r) => { unrefSpare = setTimeout(r, opts.spareWait ?? 80); unrefSpare.unref?.(); });
+        await Promise.race([refill.catch(() => {}), spareTimer]);
+        clearTimeout(unrefSpare);
+      }
       warm = this._spares.pop() || null;
     }
     if (warm) {
@@ -431,10 +436,15 @@ export class Browser extends Emitter {
       // under load a renderer can be slow or wedged, and a one-round-trip probe is far
       // cheaper than the caller discovering it. Failing the probe falls back to a
       // normal (cold) page, so correctness never depends on the spare being good.
-      const healthy = await Promise.race([
-        warm.session.send('Runtime.evaluate', { expression: '1', returnByValue: true }, { timeout: 2500 }).then(() => true, () => false),
-        new Promise((r) => setTimeout(() => r(false), 3000)),
-      ]);
+      {
+        let unrefProbe;
+        const probeTimer = new Promise((r) => { unrefProbe = setTimeout(() => r(false), 3000); unrefProbe.unref?.(); });
+        const healthy = await Promise.race([
+          warm.session.send('Runtime.evaluate', { expression: '1', returnByValue: true }, { timeout: 2500 }).then(() => true, () => false),
+          probeTimer,
+        ]);
+        clearTimeout(unrefProbe);
+      }
       if (!healthy) {
         warm.close().catch(() => {});
         warm = null;
@@ -523,12 +533,21 @@ export class Browser extends Emitter {
     if (this.forwarder) this.forwarder.close().catch(() => {});
     this._closingRemote = true;   // a deliberate close must not trigger auto-reconnect
     this._spares = [];
-    try { await Promise.race([this.conn.send('Browser.close'), new Promise((r) => setTimeout(r, 3000))]); } catch {}
+    // RACE TIMERS MUST BE UNREF'D: when the send wins, a live 3s timer would
+    // hold the event loop (and the CLI process) open for its full duration —
+    // measured 3.1s of dead waiting after a 26ms close.
+    {
+      let unrefRace;
+      const timer = new Promise((r) => { unrefRace = setTimeout(r, 3000); unrefRace.unref?.(); });
+      try { await Promise.race([this.conn.send('Browser.close'), timer]); } catch {}
+      clearTimeout(unrefRace);
+    }
     this.conn.close();
     // give the process a moment to exit gracefully (profile/cookie flush) before SIGKILL
     if (this.proc) {
       await new Promise((resolve) => {
         const t = setTimeout(() => { try { this.proc.kill('SIGKILL'); } catch {} resolve(); }, 1500);
+        t.unref?.();
         this.proc.once('exit', () => { clearTimeout(t); resolve(); });
       });
     }
