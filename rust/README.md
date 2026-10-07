@@ -35,7 +35,27 @@ vlx-rs eval  url "document.title"
 vlx-rs cookies url
 vlx-rs save-session url s.json               # cookies + web storage
 vlx-rs load-session url s.json
-vlx-rs bench  url --iters 5                  # lite vs browser timings
+vlx-rs challenge url                          # what anti-bot widget is here? (waits for it)
+vlx-rs net url --filter 'api'                 # captured network log
+vlx-rs har url --bodies -o traffic.har        # HAR 1.2 export
+vlx-rs shot  url --sel 'table' -o el.png      # element screenshot
+vlx-rs pdf   url --landscape --format Letter
+vlx-rs open  url --stealth                    # coherent anti-fingerprint patches
+vlx-rs bench url --iters 5                    # lite vs browser timings
+```
+
+Stealth, human behaviour and challenge helpers are library APIs too:
+
+```rust
+use velox_core::cdp::stealth::StealthOpts;
+let s = Session::open(url, OpenOpts {
+    engine: Some("cdp".into()),
+    stealth: Some(StealthOpts { profile: Some("chrome-windows".into()), ..Default::default() }),
+    ..OpenOpts::default()
+}).await?;
+let (s, _) = s.wait_for("#late", Duration::from_secs(5)).await?;
+// the page exposes human-like input (seeded, reproducible):
+s.close().await;
 ```
 
 Output matches the JS CLI: readable markdown by default, `--json`/`--html`,
@@ -128,24 +148,35 @@ VELOX_BROWSER=/path/to/chrome cargo test --release   # includes CDP tests
 ## Status vs the JS package (honest gap list)
 
 Implemented: engines (auto/lite/cdp + needsJS escalation), navigation with
-lifecycle waits, the full selector engine (css / text= / role= / label= /
-testid= / id= / tag= / xpath= / `>>` shadow+iframe piercing — identical to JS
-because it is the same source), extraction, eval, waits, screenshots, PDFs,
-cookies (normalize + session save/load), network capture + bodies, device
-emulation, URL blocking, CLI parity for the common commands, discovery,
-benchmarks.
+lifecycle waits and `gotoWithRetry`, the full selector engine (css / text= /
+role= / label= / testid= / id= / tag= / xpath= / `>>` shadow+iframe piercing —
+identical to JS because it is the same source), extraction, eval,
+`waitForFunction` (in-page polling), screenshots + **element screenshots**
+(`shot --sel`, clip from the element rect), PDFs (paper sizes + landscape),
+cookies (normalize + session save/load), **dialogs** (accept / dismiss /
+prompt text), **network capture + bodies + HAR 1.2 export**, **request URL
+blocking**, **challenge detection** (turnstile / recaptcha / hcaptcha / arkose
+/ awswaf / px — window-object authoritative signals, noisy-iframe exclusion,
+`{wait}` mode for late-hydrating SPAs) and **waitForCaptchaToken** with
+state-diagnosis on timeout, **stealth** (4 coherent profiles + geo presets +
+UA-CH alignment with the real binary — the injected JS is extracted from the
+shared source at build time), **human behaviour** (seeded bezier mouse moves
+with overshoot, jitter typing with corrections, wheel momentum scrolling,
+warmup, press-and-hold with tremor), device emulation, **pool** (parallel
+pages across browsers with bounded concurrency), discovery, CLI parity for
+the common commands (`challenge`, `net`, `har` added), benchmarks.
 
 Not ported (tracked gaps):
 
-- **stealth** (fingerprint patches), **human** (bezier input, warmup, hold) —
-  the anti-bot behavioural layer
-- **challenge** (Cloudflare/PX/Akamai detect + engage)
-- **locators** as first-class objects, drag&drop, file upload, dialogs,
-  frames-as-pages, workers, tracing/HAR export, screencast video, clock,
-  coverage/accessibility, pool, accounts/identity tooling, plugins/middleware
-- element-level screenshots (`shot --sel` falls back to full page)
-- proxied browser launch accepts `--proxy-server` only (no auth forwarder yet)
+- **challenge engage** (clicking Turnstile checkboxes, PX press-and-hold flows)
+  — detection + token waiting is in; interactive solving is not
+- **locators** as first-class objects, drag&drop, file upload, workers,
+  screencast video recording, virtual clock, coverage/accessibility APIs,
+  accounts/identity tooling, plugins/middleware
+- **proxy auth**: `--proxy-server` only (no local auth forwarder yet)
+- HTML **parsing for the lite engine** uses `scraper`; the JS engine's
+  custom forgiving parser differs on pathological markup
 
 The JS package remains the reference implementation; `rust/` is the fast
-standalone path (CLI + library) and the build-time engine extraction keeps
-selector behaviour from drifting.
+standalone path (CLI + library) and the build-time extraction keeps both the
+selector engine and the stealth injection in lockstep with the JS package.

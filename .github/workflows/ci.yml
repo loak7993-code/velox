@@ -36,6 +36,14 @@ jobs:
 
       - name: Rust port (velox-rs)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: cargo fmt (rust workspace)
+        working-directory: rust
+        run: cargo fmt --all -- --check
+      - name: cargo clippy (rust workspace)
+        working-directory: rust
+        run: cargo clippy --all-targets --release -- -D warnings
       - name: cargo test (rust workspace)
         working-directory: rust
         env:

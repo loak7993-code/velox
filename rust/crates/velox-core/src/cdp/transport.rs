@@ -1,14 +1,14 @@
 // velox-rs :: cdp/transport — a CDP WebSocket connection with request/response
 // correlation and an event bus. One instance per target (and one for the
 // browser-level endpoint). Writer + reader run as separate tasks.
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use futures_util::{SinkExt, StreamExt};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 
 enum ToWire {
@@ -77,11 +77,16 @@ impl CdpConn {
                             let responder = pending_reader.lock().await.remove(&id);
                             if let Some(tx) = responder {
                                 if let Some(err) = v.get("error") {
-                                    let _ = tx.send(Err(anyhow!("CDP {}: {}",
-                                        err.get("message").and_then(Value::as_str).unwrap_or("error"),
-                                        err.get("data").and_then(Value::as_str).unwrap_or(""))));
+                                    let _ = tx.send(Err(anyhow!(
+                                        "CDP {}: {}",
+                                        err.get("message")
+                                            .and_then(Value::as_str)
+                                            .unwrap_or("error"),
+                                        err.get("data").and_then(Value::as_str).unwrap_or("")
+                                    )));
                                 } else {
-                                    let _ = tx.send(Ok(v.get("result").cloned().unwrap_or(json!({}))));
+                                    let _ =
+                                        tx.send(Ok(v.get("result").cloned().unwrap_or(json!({}))));
                                 }
                             }
                         } else if v.get("method").is_some() {
@@ -116,10 +121,16 @@ impl CdpConn {
 
     /// Send a method, await its response (with timeout).
     pub async fn send(&self, method: &str, params: Value) -> Result<Value> {
-        self.send_timeout(method, params, Duration::from_secs(30)).await
+        self.send_timeout(method, params, Duration::from_secs(30))
+            .await
     }
 
-    pub async fn send_timeout(&self, method: &str, params: Value, timeout: Duration) -> Result<Value> {
+    pub async fn send_timeout(
+        &self,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+    ) -> Result<Value> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);

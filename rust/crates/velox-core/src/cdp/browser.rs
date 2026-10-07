@@ -3,10 +3,10 @@
 // page owns its own WebSocket connection (see transport.rs).
 use super::transport::CdpConn;
 use crate::discovery::find_browser;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde_json::Value;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Default)]
@@ -114,7 +114,8 @@ impl Browser {
     /// Attach to a running browser: `ws://…` or `host:port`.
     pub async fn connect(opts: ConnectOpts) -> Result<Browser> {
         let endpoint = opts.endpoint.clone();
-        let (host_port, ws_url) = if endpoint.starts_with("ws://") || endpoint.starts_with("wss://") {
+        let (host_port, ws_url) = if endpoint.starts_with("ws://") || endpoint.starts_with("wss://")
+        {
             (None, endpoint)
         } else {
             let hp = endpoint
@@ -122,7 +123,10 @@ impl Browser {
                 .trim_start_matches("https://")
                 .trim_end_matches('/')
                 .to_string();
-            let ver: Value = reqwest::get(format!("http://{hp}/json/version")).await?.json().await?;
+            let ver: Value = reqwest::get(format!("http://{hp}/json/version"))
+                .await?
+                .json()
+                .await?;
             let ws = ver
                 .get("webSocketDebuggerUrl")
                 .and_then(Value::as_str)
@@ -150,7 +154,10 @@ impl Browser {
     }
 
     /// Open a new page (own WebSocket connection) and initialise it.
-    pub async fn new_page(&mut self, opts: super::page::PageOpts) -> Result<Arc<super::page::Page>> {
+    pub async fn new_page(
+        &mut self,
+        opts: super::page::PageOpts,
+    ) -> Result<Arc<super::page::Page>> {
         // PUT /json/new (Chrome 111+); fall back to GET for older builds.
         let target = {
             let url = format!("{}/json/new?about:blank", self.http_base());
@@ -161,9 +168,17 @@ impl Browser {
                 .await
                 .map_err(|e| anyhow!("/json/new: {e}"))?;
             if !res.status().is_success() {
-                res = self.http.get(&url).send().await.map_err(|e| anyhow!("/json/new: {e}"))?;
+                res = self
+                    .http
+                    .get(&url)
+                    .send()
+                    .await
+                    .map_err(|e| anyhow!("/json/new: {e}"))?;
             }
-            let v: Value = res.json().await.map_err(|e| anyhow!("/json/new json: {e}"))?;
+            let v: Value = res
+                .json()
+                .await
+                .map_err(|e| anyhow!("/json/new json: {e}"))?;
             v
         };
         let ws = target
@@ -171,7 +186,11 @@ impl Browser {
             .and_then(Value::as_str)
             .ok_or_else(|| anyhow!("target has no webSocketDebuggerUrl: {target}"))?
             .to_string();
-        let id = target.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+        let id = target
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let page = super::page::Page::connect(ws, id, opts).await?;
         Ok(page)
     }
@@ -190,7 +209,13 @@ impl Browser {
 
     /// Raw HTTP body fetch from the devtools http endpoint.
     pub async fn http_json(&self, path: &str) -> Result<Value> {
-        Ok(self.http.get(format!("{}{}", self.http_base(), path)).send().await?.json().await?)
+        Ok(self
+            .http
+            .get(format!("{}{}", self.http_base(), path))
+            .send()
+            .await?
+            .json()
+            .await?)
     }
 
     /// Browser-level CDP connection (Target.*, Browser.* domains) — created lazily.
@@ -266,7 +291,9 @@ async fn read_ws_url(stderr: tokio::process::ChildStderr, timeout: Duration) -> 
             Ok(Ok(0)) => break,
             Ok(Ok(_)) => {
                 if let Some(i) = line.find("DevTools listening on ") {
-                    let url = line[i + "DevTools listening on ".len()..].trim().to_string();
+                    let url = line[i + "DevTools listening on ".len()..]
+                        .trim()
+                        .to_string();
                     if url.starts_with("ws://") {
                         return Ok(url);
                     }
@@ -281,5 +308,8 @@ async fn read_ws_url(stderr: tokio::process::ChildStderr, timeout: Duration) -> 
             }
         }
     }
-    Err(anyhow!("browser did not report a DevTools endpoint within {:?}", timeout))
+    Err(anyhow!(
+        "browser did not report a DevTools endpoint within {:?}",
+        timeout
+    ))
 }

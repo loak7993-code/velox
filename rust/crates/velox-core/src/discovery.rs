@@ -1,6 +1,6 @@
 // velox-rs :: discovery — find any installed Chromium-family browser.
 // Ported from src/cdp/discovery.js (same preference order, same env override).
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::path::Path;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -17,7 +17,9 @@ fn exists(p: &str) -> bool {
 #[cfg(unix)]
 fn is_executable(p: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
-    p.metadata().map(|m| m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+    p.metadata()
+        .map(|m| m.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
 }
 #[cfg(not(unix))]
 fn is_executable(p: &Path) -> bool {
@@ -30,13 +32,22 @@ pub fn discover() -> Vec<FoundBrowser> {
         ("chrome-headless-shell", &["chrome-headless-shell"]),
         ("google-chrome", &["google-chrome", "google-chrome-stable"]),
         ("chromium", &["chromium", "chromium-browser"]),
-        ("microsoft-edge", &["microsoft-edge", "microsoft-edge-stable"]),
+        (
+            "microsoft-edge",
+            &["microsoft-edge", "microsoft-edge-stable"],
+        ),
         ("brave-browser", &["brave-browser", "brave"]),
         ("vivaldi", &["vivaldi", "vivaldi-stable"]),
         ("opera", &["opera"]),
     ];
     let mut dirs: Vec<String> = vec![];
-    for d in ["/usr/bin", "/usr/local/bin", "/snap/bin", "/opt/google/chrome", "/opt/microsoft/msedge"] {
+    for d in [
+        "/usr/bin",
+        "/usr/local/bin",
+        "/snap/bin",
+        "/opt/google/chrome",
+        "/opt/microsoft/msedge",
+    ] {
         dirs.push(d.to_string());
     }
     if let Ok(home) = std::env::var("HOME") {
@@ -56,7 +67,10 @@ pub fn discover() -> Vec<FoundBrowser> {
             for dir in &dirs {
                 let p = format!("{dir}/{bin}");
                 if exists(&p) && !out.iter().any(|f| f.path == p) {
-                    out.push(FoundBrowser { name: name.to_string(), path: p });
+                    out.push(FoundBrowser {
+                        name: name.to_string(),
+                        path: p,
+                    });
                 }
             }
         }
@@ -68,7 +82,10 @@ pub fn discover() -> Vec<FoundBrowser> {
                 for bin in *bins {
                     let p = format!("{dir}/{bin}");
                     if exists(&p) && !out.iter().any(|f| f.path == p) {
-                        out.push(FoundBrowser { name: name.to_string(), path: p });
+                        out.push(FoundBrowser {
+                            name: name.to_string(),
+                            path: p,
+                        });
                     }
                 }
             }
@@ -80,7 +97,9 @@ pub fn discover() -> Vec<FoundBrowser> {
 /// Resolve a preference (name, path, or "auto") to an executable path.
 /// $VELOX_BROWSER is the default, exactly like the JS package.
 pub fn find_browser(pref: Option<&str>) -> Result<String> {
-    let env_browser = std::env::var("VELOX_BROWSER").ok().filter(|s| !s.is_empty());
+    let env_browser = std::env::var("VELOX_BROWSER")
+        .ok()
+        .filter(|s| !s.is_empty());
     let choice = pref
         .filter(|p| !p.is_empty() && *p != "auto")
         .map(|s| s.to_string())
@@ -93,17 +112,29 @@ pub fn find_browser(pref: Option<&str>) -> Result<String> {
             return Err(anyhow!("Browser not found: {choice}"));
         }
         let all = discover();
-        let hit = all.iter().find(|b| b.name == choice).or_else(|| all.iter().find(|b| b.name.contains(&choice)));
+        let hit = all
+            .iter()
+            .find(|b| b.name == choice)
+            .or_else(|| all.iter().find(|b| b.name.contains(&choice)));
         return hit.map(|b| b.path.clone()).ok_or_else(|| {
             anyhow!(
                 "Browser \"{choice}\" not found. Available: {}",
-                all.iter().map(|b| b.name.as_str()).collect::<Vec<_>>().join(", ")
+                all.iter()
+                    .map(|b| b.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         });
     }
     let all = discover();
     const ORDER: [&str; 7] = [
-        "google-chrome", "chromium", "microsoft-edge", "brave-browser", "vivaldi", "opera", "chrome-headless-shell",
+        "google-chrome",
+        "chromium",
+        "microsoft-edge",
+        "brave-browser",
+        "vivaldi",
+        "opera",
+        "chrome-headless-shell",
     ];
     for want in ORDER {
         if let Some(hit) = all.iter().find(|b| b.name.contains(want)) {

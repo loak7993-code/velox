@@ -1,5 +1,5 @@
 // velox-rs :: devices — device emulation presets (ported from src/cdp/devices.js).
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub struct Device {
     pub name: &'static str,
@@ -19,16 +19,96 @@ const UA_ANDROID: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/5
 const UA_BOT: &str = "Mozilla/5.0 (compatible; VeloxBot/1.0; +https://velox.dev/bot)";
 
 pub const DEVICES: &[Device] = &[
-    Device { name: "desktop", width: 1366, height: 768, dsf: 1.0, mobile: false, ua: UA_WIN, platform: "Windows" },
-    Device { name: "desktop_hd", width: 1920, height: 1080, dsf: 1.0, mobile: false, ua: UA_WIN, platform: "Windows" },
-    Device { name: "mac", width: 1512, height: 982, dsf: 2.0, mobile: false, ua: UA_MAC, platform: "macOS" },
-    Device { name: "iphone_13", width: 390, height: 844, dsf: 3.0, mobile: true, ua: UA_IPHONE, platform: "iPhone" },
-    Device { name: "iphone_15", width: 393, height: 852, dsf: 3.0, mobile: true, ua: UA_IPHONE, platform: "iPhone" },
-    Device { name: "iphone_se", width: 375, height: 667, dsf: 2.0, mobile: true, ua: UA_IPHONE, platform: "iPhone" },
-    Device { name: "ipad", width: 820, height: 1180, dsf: 2.0, mobile: true, ua: UA_IPAD, platform: "iPad" },
-    Device { name: "pixel_8", width: 412, height: 915, dsf: 2.625, mobile: true, ua: UA_ANDROID, platform: "Linux armv8l" },
-    Device { name: "galaxy_s24", width: 384, height: 854, dsf: 3.0, mobile: true, ua: UA_ANDROID, platform: "Linux armv8l" },
-    Device { name: "bot", width: 1280, height: 720, dsf: 1.0, mobile: false, ua: UA_BOT, platform: "Linux x86_64" },
+    Device {
+        name: "desktop",
+        width: 1366,
+        height: 768,
+        dsf: 1.0,
+        mobile: false,
+        ua: UA_WIN,
+        platform: "Windows",
+    },
+    Device {
+        name: "desktop_hd",
+        width: 1920,
+        height: 1080,
+        dsf: 1.0,
+        mobile: false,
+        ua: UA_WIN,
+        platform: "Windows",
+    },
+    Device {
+        name: "mac",
+        width: 1512,
+        height: 982,
+        dsf: 2.0,
+        mobile: false,
+        ua: UA_MAC,
+        platform: "macOS",
+    },
+    Device {
+        name: "iphone_13",
+        width: 390,
+        height: 844,
+        dsf: 3.0,
+        mobile: true,
+        ua: UA_IPHONE,
+        platform: "iPhone",
+    },
+    Device {
+        name: "iphone_15",
+        width: 393,
+        height: 852,
+        dsf: 3.0,
+        mobile: true,
+        ua: UA_IPHONE,
+        platform: "iPhone",
+    },
+    Device {
+        name: "iphone_se",
+        width: 375,
+        height: 667,
+        dsf: 2.0,
+        mobile: true,
+        ua: UA_IPHONE,
+        platform: "iPhone",
+    },
+    Device {
+        name: "ipad",
+        width: 820,
+        height: 1180,
+        dsf: 2.0,
+        mobile: true,
+        ua: UA_IPAD,
+        platform: "iPad",
+    },
+    Device {
+        name: "pixel_8",
+        width: 412,
+        height: 915,
+        dsf: 2.625,
+        mobile: true,
+        ua: UA_ANDROID,
+        platform: "Linux armv8l",
+    },
+    Device {
+        name: "galaxy_s24",
+        width: 384,
+        height: 854,
+        dsf: 3.0,
+        mobile: true,
+        ua: UA_ANDROID,
+        platform: "Linux armv8l",
+    },
+    Device {
+        name: "bot",
+        width: 1280,
+        height: 720,
+        dsf: 1.0,
+        mobile: false,
+        ua: UA_BOT,
+        platform: "Linux x86_64",
+    },
 ];
 
 pub fn get(name: &str) -> Option<&'static Device> {

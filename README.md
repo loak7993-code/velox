@@ -943,21 +943,24 @@ vlx bench  example.com                    # lite vs browser timings
 
 `rust/` ships the same engine as a standalone Rust workspace — `vlx-rs` CLI plus
 a `velox-core` library. Same commands and output conventions, same in-page
-selector engine (extracted from `src/cdp/inject.js` at build time, so selector
-semantics cannot drift). The lite engine is reqwest+scraper; the CDP driver is
-one WebSocket per target with lifecycle-based navigation waits. The JS package
-stays the reference implementation; honest gap list in
+selector engine **and** the same stealth injection (both extracted from the JS
+sources at build time, so behaviour cannot drift). The lite engine is
+reqwest+scraper; the CDP driver is one WebSocket per target with
+lifecycle-based navigation waits. Stealth profiles, human-like input (seeded
+bezier moves, jitter typing), challenge/captcha detection, element shots,
+dialogs, HAR export and a concurrency pool are all in. The JS package stays
+the reference implementation; honest gap list in
 [rust/README.md](rust/README.md).
 
 Same test site, medians of 5 (`rust/bench.sh`):
 
 | operation | JS `vlx` | `vlx-rs` |
 |---|---|---|
-| open (auto → lite) | 126 ms | **24 ms** |
-| open (`--engine cdp`) | 5144 ms | **144 ms** |
-| eval `document.title` | 5163 ms | **137 ms** |
-| shot (full) | 5130 ms | **226 ms** |
-| links | 127 ms | **23 ms** |
+| open (auto → lite) | 126 ms | **23 ms** |
+| open (`--engine cdp`) | 5191 ms | **160 ms** |
+| eval `document.title` | 5088 ms | **162 ms** |
+| shot (full) | 5221 ms | **230 ms** |
+| links | 123 ms | **23 ms** |
 
 The browser path's win is Node's module-graph import cost (~5 s before the
 first CDP message); the Rust binary starts in milliseconds.

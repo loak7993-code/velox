@@ -11,12 +11,12 @@ static SSR_STATE: Lazy<Regex> = Lazy::new(|| {
 static NOSCRIPT: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"(?is)<noscript[^>]*>[\s\S]{0,400}(enable|turn on|requires) javascript"#).unwrap()
 });
-static META_REFRESH: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"(?i)<meta[^>]+http-equiv=["']?refresh["']?[^>]+url="#).unwrap()
-});
+static META_REFRESH: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)<meta[^>]+http-equiv=["']?refresh["']?[^>]+url="#).unwrap());
 static SCRIPT_SRC: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)<script[^>]+src=").unwrap());
 static TAGS: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?s)<[^>]*>").unwrap());
-static BOT_SERVERS: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)cloudflare|akamai|fastly").unwrap());
+static BOT_SERVERS: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)cloudflare|akamai|fastly").unwrap());
 
 pub fn strip_tags(html: &str) -> String {
     TAGS.replace_all(html, "").to_string()

@@ -5,18 +5,20 @@ pub mod cdp;
 pub mod devices;
 pub mod discovery;
 pub mod http;
+pub mod human;
 pub mod needs_js;
+pub mod pool;
 
 use anyhow::Result;
-use serde_json::Value;
 use cdp::browser::Browser;
 use cdp::page::Page;
 use http::html::HtmlDoc;
+use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 
 pub use cdp::page::{Cookie, Nav, RequestEntry, WaitUntil};
-pub use discovery::{discover, find_browser, FoundBrowser};
+pub use discovery::{FoundBrowser, discover, find_browser};
 pub use http::{Link, LiteResponse};
 
 #[derive(Debug, Clone, Default)]
@@ -33,6 +35,7 @@ pub struct OpenOpts {
     pub locale: Option<String>,
     pub timezone: Option<String>,
     pub block_urls: Vec<String>,
+    pub stealth: Option<cdp::stealth::StealthOpts>,
 }
 
 impl Default for TimeoutZero {
@@ -61,6 +64,8 @@ impl OpenOpts {
             timezone: self.timezone.clone(),
             block_urls: self.block_urls.clone(),
             intercept: true,
+            stealth: self.stealth.clone(),
+            dialog_action: None,
         }
     }
     pub fn launch_opts(&self) -> cdp::browser::LaunchOpts {
@@ -75,6 +80,8 @@ impl OpenOpts {
 }
 
 /// What `open()` returns: a lite snapshot or a live CDP page — one surface.
+/// (The lite variant is a snapshot value; the cdp variant owns a browser process.)
+#[allow(clippy::large_enum_variant)]
 pub enum Session {
     Lite(LiteSession),
     Cdp(CdpSession),
@@ -150,7 +157,9 @@ impl Session {
     pub async fn readable(&self) -> Result<String> {
         match self {
             Session::Lite(s) => Ok(s.doc.readable()),
-            Session::Cdp(s) => Ok(CdpSession::readable_html(&s.page, &s.page.content().await?).await),
+            Session::Cdp(s) => {
+                Ok(CdpSession::readable_html(&s.page, &s.page.content().await?).await)
+            }
         }
     }
 
@@ -174,13 +183,24 @@ impl Session {
             Session::Cdp(s) => {
                 let rows = s
                     .page
-                    .extract("a[href]", serde_json::json!({ "text": true, "attrs": ["href"] }))
+                    .extract(
+                        "a[href]",
+                        serde_json::json!({ "text": true, "attrs": ["href"] }),
+                    )
                     .await?;
                 Ok(rows
                     .into_iter()
                     .map(|r| Link {
-                        text: r.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        href: r.get("href").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        text: r
+                            .get("text")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        href: r
+                            .get("href")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     })
                     .collect())
             }
@@ -288,10 +308,18 @@ impl Session {
     }
 
     pub async fn pdf(self, format: Option<&str>) -> Result<(Session, Vec<u8>)> {
+        self.pdf_landscape(format, false).await
+    }
+
+    pub async fn pdf_landscape(
+        self,
+        format: Option<&str>,
+        landscape: bool,
+    ) -> Result<(Session, Vec<u8>)> {
         let s = self.escalate_lite().await?;
         match s {
             Session::Cdp(s) => {
-                let buf = s.page.pdf(format, false).await?;
+                let buf = s.page.pdf(format, landscape).await?;
                 Ok((Session::Cdp(s), buf))
             }
             _ => unreachable!(),
@@ -315,6 +343,73 @@ impl Session {
             Session::Cdp(s) => {
                 let ok = s.page.wait_for_selector(sel, timeout).await?;
                 Ok((Session::Cdp(s), ok))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Detect the anti-bot widget on the page (escalates lite → cdp).
+    pub async fn detect_challenge(
+        self,
+        wait: bool,
+        timeout: Duration,
+    ) -> Result<(Session, cdp::challenge::ChallengeInfo)> {
+        let s = self.escalate_lite().await?;
+        match s {
+            Session::Cdp(s) => {
+                let info = s.page.detect_challenge(wait, timeout).await?;
+                Ok((Session::Cdp(s), info))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Network log with a filter (substring or /regex/); escalates lite → cdp.
+    pub async fn netlog(
+        self,
+        filter: Option<&str>,
+    ) -> Result<(Session, Vec<cdp::page::RequestEntry>)> {
+        let s = self.escalate_lite().await?;
+        match s {
+            Session::Cdp(s) => {
+                let mut rows: Vec<cdp::page::RequestEntry> = s.page.requests().await;
+                if let Some(f) = filter {
+                    let re = if f.starts_with('/') && f.ends_with('/') && f.len() > 2 {
+                        regex::Regex::new(&f[1..f.len() - 1]).ok()
+                    } else {
+                        regex::Regex::new(&regex::escape(f)).ok()
+                    };
+                    if let Some(re) = re {
+                        rows.retain(|r| re.is_match(&r.url));
+                    } else {
+                        rows.retain(|r| r.url.contains(f));
+                    }
+                }
+                Ok((Session::Cdp(s), rows))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// HAR 1.2 export (escalates lite → cdp).
+    pub async fn har(self, with_bodies: bool) -> Result<(Session, Value)> {
+        let s = self.escalate_lite().await?;
+        match s {
+            Session::Cdp(s) => {
+                let har = s.page.har(with_bodies).await?;
+                Ok((Session::Cdp(s), har))
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    /// Screenshot one element (escalates lite → cdp).
+    pub async fn element_shot(self, sel: &str) -> Result<(Session, Vec<u8>)> {
+        let s = self.escalate_lite().await?;
+        match s {
+            Session::Cdp(s) => {
+                let png = s.page.screenshot_element(sel).await?;
+                Ok((Session::Cdp(s), png))
             }
             _ => unreachable!(),
         }
@@ -396,7 +491,11 @@ impl CdpSession {
             )
             .await?;
         let _ = nav;
-        Ok(CdpSession { browser, page, opts })
+        Ok(CdpSession {
+            browser,
+            page,
+            opts,
+        })
     }
 
     /// Readability for browser pages: run the same rendering over the DOM the

@@ -2,7 +2,7 @@
 // compression, the needsJS escalation heuristic, and the HtmlDoc over scraper.
 pub mod html;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -58,16 +58,10 @@ pub fn default_opts() -> LiteOpts {
 
 /// Fetch one URL. Cookie state lives in the returned response's jar handle
 /// (a reqwest Client reused by the caller keeps the keep-alive pool warm).
-pub async fn fetch(
-    client: &reqwest::Client,
-    url: &str,
-    opts: &LiteOpts,
-) -> Result<LiteResponse> {
+pub async fn fetch(client: &reqwest::Client, url: &str, opts: &LiteOpts) -> Result<LiteResponse> {
     let start = std::time::Instant::now();
     let start_url = url.to_string();
-    let mut req = client
-        .get(url)
-        .timeout(opts.timeout);
+    let mut req = client.get(url).timeout(opts.timeout);
     if let Some(ua) = &opts.user_agent {
         req = req.header(reqwest::header::USER_AGENT, ua);
     }
@@ -106,7 +100,9 @@ pub fn build_client(opts: &LiteOpts) -> Result<reqwest::Client> {
         .brotli(true)
         .deflate(true)
         .cookie_store(true)
-        .redirect(reqwest::redirect::Policy::limited(opts.max_redirects.max(1)));
+        .redirect(reqwest::redirect::Policy::limited(
+            opts.max_redirects.max(1),
+        ));
     if let Some(proxy) = &opts.proxy {
         b = b.proxy(reqwest::Proxy::all(proxy).map_err(|e| anyhow!("proxy: {e}"))?);
     }

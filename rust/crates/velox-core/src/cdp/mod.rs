@@ -5,13 +5,15 @@
 // correlated by id, events fanned out on a broadcast channel. No flat-protocol
 // session multiplexing needed — the HTTP /json endpoints do target lifecycle.
 pub mod browser;
+pub mod challenge;
 pub mod page;
+pub mod stealth;
 pub mod transport;
 
 pub use browser::{Browser, ConnectOpts, LaunchOpts};
 pub use page::{Cookie, GotoOpts, Nav, Page, PageOpts, RequestEntry, WaitUntil};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Base64 helpers for binary CDP payloads (screenshots, PDFs).
 pub(crate) fn b64_decode(s: &str) -> Result<Vec<u8>> {

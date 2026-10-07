@@ -26,10 +26,10 @@ fn resolve_url(base: &str, href: &str) -> String {
     {
         return href.to_string();
     }
-    if let Ok(b) = url::Url::parse(base) {
-        if let Ok(j) = b.join(href) {
-            return j.to_string();
-        }
+    if let Ok(b) = url::Url::parse(base)
+        && let Ok(j) = b.join(href)
+    {
+        return j.to_string();
     }
     href.to_string()
 }
@@ -55,17 +55,20 @@ fn select_all<'a>(doc: &'a Html, sel: &str) -> Vec<ElementRef<'a>> {
 
 impl HtmlDoc {
     pub fn parse(html: &str, base: &str) -> HtmlDoc {
-        HtmlDoc { html: Html::parse_document(html), base: base.to_string() }
+        HtmlDoc {
+            html: Html::parse_document(html),
+            base: base.to_string(),
+        }
     }
 
     pub fn text_of(&self, sel: &str) -> Option<String> {
         let doc = &self.html;
-        select_all(&doc, sel).first().map(|el| text_content(*el))
+        select_all(doc, sel).first().map(|el| text_content(*el))
     }
 
     pub fn attr_of(&self, sel: &str, name: &str) -> Option<String> {
         let doc = &self.html;
-        select_all(&doc, sel)
+        select_all(doc, sel)
             .first()
             .and_then(|el| el.value().attr(name))
             .map(|s| s.to_string())
@@ -73,7 +76,7 @@ impl HtmlDoc {
 
     pub fn html_of(&self, sel: &str) -> Option<String> {
         let doc = &self.html;
-        select_all(&doc, sel).first().map(|el| el.inner_html())
+        select_all(doc, sel).first().map(|el| el.inner_html())
     }
 
     pub fn title(&self) -> Option<String> {
@@ -89,7 +92,10 @@ impl HtmlDoc {
                 if href.starts_with("javascript:") || href.starts_with('#') {
                     continue;
                 }
-                out.push(Link { text: text_content(el), href: resolve_url(&self.base, href) });
+                out.push(Link {
+                    text: text_content(el),
+                    href: resolve_url(&self.base, href),
+                });
             }
         }
         out
@@ -118,12 +124,11 @@ impl HtmlDoc {
             for table in doc.select(&sel) {
                 let mut headers: Vec<String> = vec![];
                 let mut rows: Vec<Vec<String>> = vec![];
-                if let Ok(thead_sel) = Selector::parse("thead tr") {
-                    if let Some(thead) = table.select(&thead_sel).next() {
-                        if let Ok(cell_sel) = Selector::parse("th, td") {
-                            headers = thead.select(&cell_sel).map(text_content).collect();
-                        }
-                    }
+                if let Ok(thead_sel) = Selector::parse("thead tr")
+                    && let Some(thead) = table.select(&thead_sel).next()
+                    && let Ok(cell_sel) = Selector::parse("th, td")
+                {
+                    headers = thead.select(&cell_sel).map(text_content).collect();
                 }
                 if let Ok(tr_sel) = Selector::parse("tr") {
                     for tr in table.select(&tr_sel) {
@@ -133,13 +138,13 @@ impl HtmlDoc {
                             if cells.is_empty() {
                                 continue;
                             }
-                            if headers.is_empty() && rows.is_empty() {
-                                if let Ok(th_sel) = Selector::parse("th") {
-                                    if tr.select(&th_sel).next().is_some() {
-                                        headers = cells;
-                                        continue;
-                                    }
-                                }
+                            if headers.is_empty()
+                                && rows.is_empty()
+                                && let Ok(th_sel) = Selector::parse("th")
+                                && tr.select(&th_sel).next().is_some()
+                            {
+                                headers = cells;
+                                continue;
                             }
                             rows.push(cells);
                         }
@@ -186,10 +191,10 @@ impl HtmlDoc {
     pub fn meta(&self) -> std::collections::HashMap<String, String> {
         let doc = &self.html;
         let mut out = std::collections::HashMap::new();
-        if let Ok(t_sel) = Selector::parse("title") {
-            if let Some(t) = doc.select(&t_sel).next() {
-                out.insert("title".to_string(), text_content(t));
-            }
+        if let Ok(t_sel) = Selector::parse("title")
+            && let Some(t) = doc.select(&t_sel).next()
+        {
+            out.insert("title".to_string(), text_content(t));
         }
         if let Ok(m_sel) = Selector::parse("meta") {
             for m in doc.select(&m_sel) {
@@ -209,9 +214,7 @@ impl HtmlDoc {
         Selector::parse("script[type=\"application/ld+json\"]")
             .map(|sel| {
                 doc.select(&sel)
-                    .filter_map(|s| {
-                        serde_json::from_str(&s.text().collect::<String>()).ok()
-                    })
+                    .filter_map(|s| serde_json::from_str(&s.text().collect::<String>()).ok())
                     .collect()
             })
             .unwrap_or_default()
@@ -224,7 +227,9 @@ impl HtmlDoc {
         walk_readable(&self.html.root_element(), &mut out);
         let body = collapse_blanks(&out);
         // title first, like the JS facade renders `# {title}\n\n{body}`
-        let title = select_all(&self.html, "title").first().map(|el| text_content(*el));
+        let title = select_all(&self.html, "title")
+            .first()
+            .map(|el| text_content(*el));
         match title {
             Some(t) if !t.is_empty() && !body.starts_with(&format!("# {t}")) => {
                 format!("# {t}\n\n{body}")
@@ -263,10 +268,10 @@ fn walk_readable(node: &ego_tree::NodeRef<'_, scraper::node::Node>, out: &mut St
                 }
                 "br" => out.push('\n'),
                 "img" => {
-                    if let Some(alt) = el.value().attr("alt") {
-                        if !alt.is_empty() {
-                            out.push_str(&format!(" [img: {alt}] "));
-                        }
+                    if let Some(alt) = el.value().attr("alt")
+                        && !alt.is_empty()
+                    {
+                        out.push_str(&format!(" [img: {alt}] "));
                     }
                 }
                 _ => walk_readable(&child, out),

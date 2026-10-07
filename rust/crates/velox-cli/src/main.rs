@@ -1,14 +1,18 @@
 // vlx-rs — the velox CLI in Rust. Same commands and output conventions as the
 // JS `vlx` binary: readable markdown by default, --json/--html/--raw formats,
 // -o/--out file outputs, auto engine (lite first, browser when JS is needed).
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::{Parser, Subcommand};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use velox_core::{Session, OpenOpts};
+use velox_core::{OpenOpts, Session};
 
 #[derive(Parser)]
-#[command(name = "vlx-rs", version, about = "vlx-rs — velox in Rust. Browser automation at terminal velocity.")]
+#[command(
+    name = "vlx-rs",
+    version,
+    about = "vlx-rs — velox in Rust. Browser automation at terminal velocity."
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -67,6 +71,9 @@ enum Cmd {
         /// block URL globs (repeatable)
         #[arg(long = "block")]
         block: Vec<String>,
+        /// apply coherent anti-fingerprint patches
+        #[arg(long)]
+        stealth: bool,
     },
     /// Screenshot → out.png
     Shot {
@@ -85,6 +92,9 @@ enum Cmd {
         timeout: Option<u64>,
         #[arg(long)]
         proxy: Option<String>,
+        /// apply coherent anti-fingerprint patches
+        #[arg(long)]
+        stealth: bool,
     },
     /// Save the page as PDF
     Pdf {
@@ -94,6 +104,9 @@ enum Cmd {
         /// paper format: A4 | Letter | Legal | A3 | A5
         #[arg(long)]
         format: Option<String>,
+        /// landscape orientation
+        #[arg(long)]
+        landscape: bool,
         #[arg(long)]
         timeout: Option<u64>,
         #[arg(long)]
@@ -137,6 +150,9 @@ enum Cmd {
         timeout: Option<u64>,
         #[arg(long)]
         proxy: Option<String>,
+        /// apply coherent anti-fingerprint patches
+        #[arg(long)]
+        stealth: bool,
     },
     /// Print cookies seen while loading the page
     Cookies {
@@ -164,6 +180,46 @@ enum Cmd {
         #[arg(long)]
         proxy: Option<String>,
     },
+    /// What anti-bot widget is on this page? (waits for late hydration)
+    Challenge {
+        url: String,
+        /// poll until a widget mounts (default: on)
+        #[arg(long, default_value = "true")]
+        wait: bool,
+        /// wait timeout in ms
+        #[arg(long, default_value = "20000")]
+        timeout: u64,
+        #[arg(long)]
+        timeout_nav: Option<u64>,
+        #[arg(long)]
+        proxy: Option<String>,
+    },
+    /// Print the network log captured while loading the page
+    Net {
+        url: String,
+        /// filter by url substring or /regex/
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        timeout: Option<u64>,
+        #[arg(long)]
+        proxy: Option<String>,
+    },
+    /// Export the captured network traffic as HAR 1.2
+    Har {
+        url: String,
+        /// include response bodies
+        #[arg(long)]
+        bodies: bool,
+        #[arg(short, long)]
+        out: Option<String>,
+        #[arg(long)]
+        timeout: Option<u64>,
+        #[arg(long)]
+        proxy: Option<String>,
+    },
     /// Time lite vs browser on the same URL
     Bench {
         url: String,
@@ -183,13 +239,13 @@ fn parse_headers(raw: &[String]) -> Vec<(String, String)> {
 }
 
 fn parse_viewport(v: &Option<String>) -> Option<(u32, u32, f64)> {
-    v.as_deref()
-        .and_then(|s| {
-            let (w, h) = s.split_once('x')?;
-            Some((w.trim().parse().ok()?, h.trim().parse().ok()?, 1.0))
-        })
+    v.as_deref().and_then(|s| {
+        let (w, h) = s.split_once('x')?;
+        Some((w.trim().parse().ok()?, h.trim().parse().ok()?, 1.0))
+    })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn open_opts(
     engine: Option<&str>,
     timeout: Option<u64>,
@@ -199,6 +255,7 @@ fn open_opts(
     headers: &[(String, String)],
     viewport: Option<(u32, u32, f64)>,
     block: &[String],
+    stealth_cfg: &Option<bool>,
 ) -> OpenOpts {
     OpenOpts {
         engine: engine.map(|s| s.to_string()),
@@ -212,6 +269,9 @@ fn open_opts(
         locale: None,
         timezone: None,
         block_urls: block.to_vec(),
+        stealth: stealth_cfg
+            .as_ref()
+            .map(|_| velox_core::cdp::stealth::StealthOpts::default()),
     }
 }
 
@@ -221,25 +281,45 @@ fn parse_cookie_file(path: &str) -> Result<Value> {
 }
 
 /// Apply a saved session (cookies + origins/localStorage) to a cdp page.
-async fn apply_session(page: &std::sync::Arc<velox_core::cdp::page::Page>, state: &Value) -> Result<()> {
+async fn apply_session(
+    page: &std::sync::Arc<velox_core::cdp::page::Page>,
+    state: &Value,
+) -> Result<()> {
     if let Some(cookies) = state.get("cookies").and_then(Value::as_array) {
         let list: Vec<velox_core::cdp::page::Cookie> = cookies
             .iter()
             .filter_map(|c| {
                 Some(velox_core::cdp::page::Cookie {
                     name: c.get("name")?.as_str()?.to_string(),
-                    value: c.get("value").and_then(Value::as_str).unwrap_or("").to_string(),
-                    domain: c.get("domain").and_then(Value::as_str).unwrap_or("").to_string(),
-                    path: c.get("path").and_then(Value::as_str).unwrap_or("/").to_string(),
+                    value: c
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    domain: c
+                        .get("domain")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    path: c
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .unwrap_or("/")
+                        .to_string(),
                     expires: c.get("expires").and_then(Value::as_f64),
                     http_only: c.get("httpOnly").and_then(Value::as_bool).unwrap_or(false),
                     secure: c.get("secure").and_then(Value::as_bool).unwrap_or(false),
-                    same_site: c.get("sameSite").and_then(Value::as_str).map(|s| s.to_string()),
+                    same_site: c
+                        .get("sameSite")
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string()),
                 })
             })
             .collect();
         if !list.is_empty() {
-            let _ = page.set_cookies(velox_core::cdp::page::normalize_cookies(list)).await;
+            let _ = page
+                .set_cookies(velox_core::cdp::page::normalize_cookies(list))
+                .await;
         }
     }
     let _ = page.apply_storage_state(state).await;
@@ -275,7 +355,9 @@ async fn run() -> Result<()> {
         Cmd::Detect => {
             let found = velox_core::discover();
             if found.is_empty() {
-                println!("no Chromium-family browsers found — set VELOX_BROWSER or install any of: Chrome, Chromium, Edge, Brave, Vivaldi, Opera");
+                println!(
+                    "no Chromium-family browsers found — set VELOX_BROWSER or install any of: Chrome, Chromium, Edge, Brave, Vivaldi, Opera"
+                );
             } else {
                 for b in found {
                     println!("{:<28} {}", b.name, b.path);
@@ -284,10 +366,36 @@ async fn run() -> Result<()> {
         }
 
         Cmd::Open {
-            url, json, html, raw, sel, engine, timeout, out, quiet, wait, viewport, device, ua, proxy, headers, block,
+            url,
+            json,
+            html,
+            raw,
+            sel,
+            engine,
+            timeout,
+            out,
+            quiet,
+            wait,
+            viewport,
+            device,
+            ua,
+            proxy,
+            headers,
+            block,
+            stealth,
         } => {
-            let opts = open_opts(engine.as_deref(), timeout, proxy.as_deref(), device.as_deref(),
-                ua.as_deref(), &parse_headers(&headers), parse_viewport(&viewport), &block);
+            let sc = Some(stealth);
+            let opts = open_opts(
+                engine.as_deref(),
+                timeout,
+                proxy.as_deref(),
+                device.as_deref(),
+                ua.as_deref(),
+                &parse_headers(&headers),
+                parse_viewport(&viewport),
+                &block,
+                &sc,
+            );
             let s = Session::open(&url, opts).await?;
             let s = match &wait {
                 Some(w) => s.wait_for(w, Duration::from_secs(10)).await?.0,
@@ -296,17 +404,14 @@ async fn run() -> Result<()> {
             if json {
                 let meta = s.meta().await?;
                 let body = match &sel {
-                    Some(sel) => {
-                        let rows = match s {
-                            Session::Lite(ref l) => l
-                                .doc
-                                .text_of(sel)
-                                .map(|t| vec![serde_json::json!({ "text": t })])
-                                .unwrap_or_default(),
-                            Session::Cdp(_) => vec![],
-                        };
-                        rows
-                    }
+                    Some(sel) => match s {
+                        Session::Lite(ref l) => l
+                            .doc
+                            .text_of(sel)
+                            .map(|t| vec![serde_json::json!({ "text": t })])
+                            .unwrap_or_default(),
+                        Session::Cdp(_) => vec![],
+                    },
                     None => vec![],
                 };
                 let payload = if body.is_empty() {
@@ -329,43 +434,107 @@ async fn run() -> Result<()> {
             s.close().await;
         }
 
-        Cmd::Shot { url, full, sel, out, engine, timeout, proxy } => {
+        Cmd::Shot {
+            url,
+            full,
+            sel,
+            out,
+            engine,
+            timeout,
+            proxy,
+            stealth,
+        } => {
             let out = out.unwrap_or_else(|| "shot.png".to_string());
-            let opts = open_opts(engine.as_deref(), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+            let opts = open_opts(
+                engine.as_deref(),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &Some(stealth),
+            );
             let s = Session::open(&url, opts).await?;
-            let (s, png) = s.screenshot(full).await?;
-            if let Some(sel) = &sel {
-                // element screenshot: crop via in-page rect is a gap (see README);
-                // fall back to the full capture for now
-                let _ = sel;
-            }
+            let (s, png) = match &sel {
+                Some(sel) => s.element_shot(sel).await?,
+                None => s.screenshot(full).await?,
+            };
             std::fs::write(&out, &png)?;
             println!("{out}  {:.1} KB", png.len() as f64 / 1024.0);
             s.close().await;
         }
 
-        Cmd::Pdf { url, out, format, timeout, proxy } => {
+        Cmd::Pdf {
+            url,
+            out,
+            format,
+            landscape,
+            timeout,
+            proxy,
+        } => {
             let out = out.unwrap_or_else(|| "page.pdf".to_string());
-            let opts = open_opts(Some("cdp"), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let s = Session::open(&url, opts).await?;
-            let (s, pdf) = s.pdf(format.as_deref()).await?;
+            let (s, pdf) = s.pdf_landscape(format.as_deref(), landscape).await?;
             std::fs::write(&out, &pdf)?;
             println!("{out}  {:.1} KB", pdf.len() as f64 / 1024.0);
             s.close().await;
         }
 
-        Cmd::Links { url, json, out, engine, timeout, proxy } => {
-            let opts = open_opts(engine.as_deref(), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+        Cmd::Links {
+            url,
+            json,
+            out,
+            engine,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                engine.as_deref(),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let s = Session::open(&url, opts).await?;
             let links = s.links().await?;
             if json {
-                emit(&serde_json::to_string_pretty(
-                    &links.iter().map(|l| serde_json::json!({ "text": l.text, "href": l.href })).collect::<Vec<_>>(),
-                )?, &out, false);
+                emit(
+                    &serde_json::to_string_pretty(
+                        &links
+                            .iter()
+                            .map(|l| serde_json::json!({ "text": l.text, "href": l.href }))
+                            .collect::<Vec<_>>(),
+                    )?,
+                    &out,
+                    false,
+                );
             } else {
                 let text = links
                     .iter()
-                    .map(|l| format!("{:<62} {}", l.text.chars().take(60).collect::<String>(), l.href))
+                    .map(|l| {
+                        format!(
+                            "{:<62} {}",
+                            l.text.chars().take(60).collect::<String>(),
+                            l.href
+                        )
+                    })
                     .collect::<Vec<_>>()
                     .join("\n");
                 emit(&text, &out, false);
@@ -373,14 +542,36 @@ async fn run() -> Result<()> {
             s.close().await;
         }
 
-        Cmd::Scrape { url, recipe, out, engine, timeout, proxy } => {
-            let opts = open_opts(engine.as_deref(), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+        Cmd::Scrape {
+            url,
+            recipe,
+            out,
+            engine,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                engine.as_deref(),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let s = Session::open(&url, opts).await?;
             let data = match recipe.as_str() {
                 "text" => serde_json::json!(s.readable().await?),
                 "links" => {
                     let links = s.links().await?;
-                    serde_json::json!(links.iter().map(|l| serde_json::json!({ "text": l.text, "href": l.href })).collect::<Vec<_>>())
+                    serde_json::json!(
+                        links
+                            .iter()
+                            .map(|l| serde_json::json!({ "text": l.text, "href": l.href }))
+                            .collect::<Vec<_>>()
+                    )
                 }
                 "images" => serde_json::json!(s.images().await?),
                 "tables" => serde_json::json!(s.tables().await?),
@@ -403,28 +594,77 @@ async fn run() -> Result<()> {
             s.close().await;
         }
 
-        Cmd::Eval { url, expr, engine, timeout, proxy } => {
-            let opts = open_opts(Some(engine.unwrap_or_else(|| "cdp".to_string()).as_str()),
-                timeout, proxy.as_deref(), None, None, &[], None, &[]);
+        Cmd::Eval {
+            url,
+            expr,
+            engine,
+            timeout,
+            proxy,
+            stealth,
+        } => {
+            let sc = Some(stealth);
+            let opts = open_opts(
+                Some(engine.unwrap_or_else(|| "cdp".to_string()).as_str()),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &sc,
+            );
             let s = Session::open(&url, opts).await?;
             let (s, v) = s.eval(&expr).await?;
-            println!("{}", match &v {
-                Value::String(s) => s.clone(),
-                other => serde_json::to_string_pretty(other)?,
-            });
+            println!(
+                "{}",
+                match &v {
+                    Value::String(s) => s.clone(),
+                    other => serde_json::to_string_pretty(other)?,
+                }
+            );
             s.close().await;
         }
 
-        Cmd::Cookies { url, timeout, proxy } => {
-            let opts = open_opts(Some("cdp"), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+        Cmd::Cookies {
+            url,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let s = Session::open(&url, opts).await?;
             let cookies = s.cookies().await?;
             println!("{}", serde_json::to_string_pretty(&cookies)?);
             s.close().await;
         }
 
-        Cmd::SaveSession { url, file, timeout, proxy } => {
-            let opts = open_opts(Some("cdp"), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+        Cmd::SaveSession {
+            url,
+            file,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let s = Session::open(&url, opts).await?;
             if let Session::Cdp(ref cdp) = s {
                 let cookies = cdp.page.cookies().await?;
@@ -439,26 +679,60 @@ async fn run() -> Result<()> {
                     }],
                 });
                 std::fs::write(&file, serde_json::to_string_pretty(&state)?)?;
-                println!("saved {} cookies + {} storage keys → {file}", cookies.len(), ls.len());
+                println!(
+                    "saved {} cookies + {} storage keys → {file}",
+                    cookies.len(),
+                    ls.len()
+                );
             } else {
                 anyhow::bail!("save-session needs the browser engine");
             }
             s.close().await;
         }
 
-        Cmd::LoadSession { url, file, timeout, proxy } => {
+        Cmd::LoadSession {
+            url,
+            file,
+            timeout,
+            proxy,
+        } => {
             let state = parse_cookie_file(&file)?;
-            let opts = open_opts(Some("cdp"), timeout, proxy.as_deref(), None, None, &[], None, &[]);
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
             let session = Session::open("about:blank", opts).await?;
             if let Session::Cdp(cdp) = session {
                 apply_session(&cdp.page, &state).await?;
-                let nav = cdp.page.goto(&url, velox_core::cdp::page::GotoOpts {
-                    wait_until: Some(velox_core::cdp::page::WaitUntil::Interactive),
-                    timeout: Some(timeout.map(Duration::from_millis).unwrap_or(Duration::from_secs(45))),
-                    referer: None,
-                }).await?;
+                let nav = cdp
+                    .page
+                    .goto(
+                        &url,
+                        velox_core::cdp::page::GotoOpts {
+                            wait_until: Some(velox_core::cdp::page::WaitUntil::Interactive),
+                            timeout: Some(
+                                timeout
+                                    .map(Duration::from_millis)
+                                    .unwrap_or(Duration::from_secs(45)),
+                            ),
+                            referer: None,
+                        },
+                    )
+                    .await?;
                 let title = cdp.page.title().await?;
-                println!("status {}  title: {title}", nav.status.map(|s| s.to_string()).unwrap_or_else(|| "-".into()));
+                println!(
+                    "status {}  title: {title}",
+                    nav.status
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "-".into())
+                );
                 let s = Session::Cdp(cdp);
                 s.close().await;
             } else {
@@ -466,12 +740,105 @@ async fn run() -> Result<()> {
             }
         }
 
+        Cmd::Challenge {
+            url,
+            wait,
+            timeout,
+            timeout_nav,
+            proxy,
+        } => {
+            let opts = open_opts(
+                Some("cdp"),
+                timeout_nav,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
+            let s = Session::open(&url, opts).await?;
+            let (s, info) = s
+                .detect_challenge(wait, Duration::from_millis(timeout))
+                .await?;
+            println!("{}", serde_json::to_string_pretty(&info)?);
+            s.close().await;
+        }
+
+        Cmd::Net {
+            url,
+            filter,
+            json,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
+            let s = Session::open(&url, opts).await?;
+            // let late fetches land; a plain wait for any content is best-effort
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            let (s, rows) = s.netlog(filter.as_deref()).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                for r in rows {
+                    println!(
+                        "{:<7} {:>3}  {}",
+                        r.method,
+                        r.status
+                            .map(|x| x.to_string())
+                            .unwrap_or_else(|| "-".into()),
+                        r.url
+                    );
+                }
+            }
+            s.close().await;
+        }
+
+        Cmd::Har {
+            url,
+            bodies,
+            out,
+            timeout,
+            proxy,
+        } => {
+            let opts = open_opts(
+                Some("cdp"),
+                timeout,
+                proxy.as_deref(),
+                None,
+                None,
+                &[],
+                None,
+                &[],
+                &None,
+            );
+            let s = Session::open(&url, opts).await?;
+            let (s, har) = s.har(bodies).await?;
+            emit(&serde_json::to_string_pretty(&har)?, &out, false);
+            s.close().await;
+        }
+
         Cmd::Bench { url, iters } => {
             // lite vs browser on the same URL, N iterations each
             let mut lite_ms = vec![];
             for _ in 0..iters {
                 let t0 = Instant::now();
-                let s = Session::open(&url, open_opts(Some("lite"), None, None, None, None, &[], None, &[])).await?;
+                let s = Session::open(
+                    &url,
+                    open_opts(Some("lite"), None, None, None, None, &[], None, &[], &None),
+                )
+                .await?;
                 let _ = s.readable().await?;
                 lite_ms.push(t0.elapsed().as_millis());
                 s.close().await;
@@ -479,21 +846,34 @@ async fn run() -> Result<()> {
             let mut cdp_launch = vec![];
             let mut cdp_goto = vec![];
             for _ in 0..iters {
-                let opts = open_opts(Some("cdp"), None, None, None, None, &[], None, &[]);
+                let opts = open_opts(Some("cdp"), None, None, None, None, &[], None, &[], &None);
                 let t0 = Instant::now();
                 let mut b = velox_core::cdp::Browser::launch(opts.launch_opts()).await?;
                 cdp_launch.push(t0.elapsed().as_millis());
-                let page = b.new_page(velox_core::cdp::page::PageOpts { intercept: true, ..Default::default() }).await?;
-                let nav = page.goto(&url, velox_core::cdp::page::GotoOpts {
-                    wait_until: Some(velox_core::cdp::page::WaitUntil::Interactive),
-                    timeout: None,
-                    referer: None,
-                }).await?;
+                let page = b
+                    .new_page(velox_core::cdp::page::PageOpts {
+                        intercept: true,
+                        ..Default::default()
+                    })
+                    .await?;
+                let nav = page
+                    .goto(
+                        &url,
+                        velox_core::cdp::page::GotoOpts {
+                            wait_until: Some(velox_core::cdp::page::WaitUntil::Interactive),
+                            timeout: None,
+                            referer: None,
+                        },
+                    )
+                    .await?;
                 cdp_goto.push(nav.ms);
                 page.close().await;
                 b.close().await;
             }
-            println!("lite fetch:        {}ms (median of {iters})", median(&lite_ms));
+            println!(
+                "lite fetch:        {}ms (median of {iters})",
+                median(&lite_ms)
+            );
             println!("browser launch:    {}ms", median(&cdp_launch));
             println!("browser goto:      {}ms", median(&cdp_goto));
         }

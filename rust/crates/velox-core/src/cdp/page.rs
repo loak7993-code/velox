@@ -2,15 +2,15 @@
 // in-page engine does extraction in a single round-trip), waits, screenshots,
 // PDFs, cookies, network capture, console/errors.
 use super::transport::CdpConn;
-use super::{b64_decode, ENGINE_CHECK, ENGINE_SOURCE};
+use super::{ENGINE_CHECK, ENGINE_SOURCE, b64_decode};
 use crate::devices;
-use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use anyhow::{Result, anyhow};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio::sync::broadcast;
 use std::time::{Duration, Instant};
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WaitUntil {
@@ -44,6 +44,8 @@ pub struct Nav {
     pub url: String,
     pub status: Option<u16>,
     pub ms: u128,
+    /// present on goto_with_retry results
+    pub attempts: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -55,7 +57,25 @@ pub struct PageOpts {
     pub timezone: Option<String>,
     pub block_urls: Vec<String>,
     pub intercept: bool, // arm Network capture for requests()/bodies
+    /// Coherent fingerprint hardening (see cdp::stealth).
+    pub stealth: Option<super::stealth::StealthOpts>,
+    /// How to answer dialogs: true → auto-accept (default), or prompt text.
+    pub dialog_action: Option<DialogAction>,
 }
+
+#[derive(Debug, Clone)]
+pub enum DialogAction {
+    Accept,
+    Dismiss,
+    Prompt(String),
+}
+
+impl Default for DialogActionDefault {
+    fn default() -> Self {
+        DialogActionDefault
+    }
+}
+pub struct DialogActionDefault;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Cookie {
@@ -77,7 +97,7 @@ pub struct Cookie {
     pub same_site: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct RequestEntry {
     pub id: String,
     pub url: String,
@@ -107,6 +127,18 @@ pub struct Page {
     inflight: Mutex<i64>,
     last_doc_status: Mutex<Option<u16>>,
     init_done: AtomicU64,
+    dialogs: Mutex<Vec<DialogEvent>>,
+    dialog_action: Mutex<DialogAction>,
+    stealth: Mutex<Option<super::stealth::Resolved>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct DialogEvent {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub message: String,
+    #[serde(rename = "defaultPrompt")]
+    pub default_prompt: Option<String>,
 }
 
 impl Page {
@@ -124,6 +156,9 @@ impl Page {
             inflight: Mutex::new(0),
             last_doc_status: Mutex::new(None),
             init_done: AtomicU64::new(0),
+            dialogs: Mutex::new(vec![]),
+            dialog_action: Mutex::new(DialogAction::Accept),
+            stealth: Mutex::new(None),
         });
         page.init().await?;
         Ok(page)
@@ -140,10 +175,83 @@ impl Page {
         if self.opts.intercept || !self.opts.block_urls.is_empty() {
             s.fire("Network.enable", json!({ "maxPostDataSize": 65536 }));
         }
+        if let Some(action) = self.opts.dialog_action.clone() {
+            *self.dialog_action.lock().unwrap() = action;
+        }
         self.wire_events().await?;
         self.apply_environment().await?;
-        // inject the selector engine
-        let _ = s.send("Runtime.evaluate", json!({ "expression": ENGINE_SOURCE })).await?;
+        // scripts apply to every future navigation AND the current document
+        let scripts: Vec<String> = vec![ENGINE_SOURCE.to_string()];
+        // stealth: resolve → align with the real binary → env overrides + injected source
+        if let Some(cfg) = self.opts.stealth.clone() {
+            let version = s
+                .send("Browser.getVersion", json!({}))
+                .await
+                .ok()
+                .and_then(|v| {
+                    v.get("product")
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string())
+                });
+            let resolved = super::stealth::resolve(&cfg)?;
+            let aligned = super::stealth::align_version(resolved, version.as_deref());
+            let _ = s
+                .send(
+                    "Network.setUserAgentOverride",
+                    super::stealth::env_overrides(&aligned),
+                )
+                .await;
+            let _ = s
+                .send(
+                    "Emulation.setLocaleOverride",
+                    json!({ "locale": aligned.locale }),
+                )
+                .await;
+            let _ = s
+                .send(
+                    "Emulation.setTimezoneOverride",
+                    json!({ "timezoneId": aligned.timezone }),
+                )
+                .await;
+            if aligned.profile.mobile {
+                let _ = s
+                    .send(
+                        "Emulation.setTouchEmulationEnabled",
+                        json!({ "enabled": true, "maxTouchPoints": aligned.profile.max_touch_points.max(5) }),
+                    )
+                    .await;
+            }
+            let _ = s
+                .send(
+                    "Network.setExtraHTTPHeaders",
+                    json!({ "headers": { "accept-language": aligned.accept_language } }),
+                )
+                .await;
+            let source = super::stealth::build_source(&aligned);
+            let _ = s
+                .send(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({ "source": source }),
+                )
+                .await;
+            let _ = s
+                .send("Runtime.evaluate", json!({ "expression": source }))
+                .await;
+            *self.stealth.lock().unwrap() = Some(aligned);
+        }
+        for script in &scripts {
+            let _ = s
+                .send(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({ "source": script }),
+                )
+                .await;
+        }
+        for script in &scripts {
+            let _ = s
+                .send("Runtime.evaluate", json!({ "expression": script }))
+                .await;
+        }
         Ok(())
     }
 
@@ -167,7 +275,11 @@ impl Page {
         let params = ev.get("params").cloned().unwrap_or(json!({}));
         match method {
             "Page.frameNavigated" => {
-                if params.get("frame").and_then(|f| f.get("parentId")).is_none() {
+                if params
+                    .get("frame")
+                    .and_then(|f| f.get("parentId"))
+                    .is_none()
+                {
                     let url = params["frame"]["url"].as_str().unwrap_or("").to_string();
                     *self.url.lock().unwrap() = url;
                     *self.main_frame.lock().unwrap() =
@@ -175,7 +287,11 @@ impl Page {
                 }
             }
             "Runtime.consoleAPICalled" => {
-                let kind = params.get("type").and_then(Value::as_str).unwrap_or("log").to_string();
+                let kind = params
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("log")
+                    .to_string();
                 let text = params["args"]
                     .as_array()
                     .map(|args| {
@@ -187,7 +303,9 @@ impl Page {
                                         other => other.to_string(),
                                     })
                                     .or_else(|| {
-                                        a.get("description").and_then(Value::as_str).map(|s| s.to_string())
+                                        a.get("description")
+                                            .and_then(Value::as_str)
+                                            .map(|s| s.to_string())
                                     })
                                     .unwrap_or_default()
                             })
@@ -208,7 +326,30 @@ impl Page {
                     .or_else(|| d["text"].as_str())
                     .unwrap_or("error")
                     .to_string();
-                self.errors.lock().unwrap().push(ConsoleMessage { kind: "error".to_string(), text });
+                self.errors.lock().unwrap().push(ConsoleMessage {
+                    kind: "error".to_string(),
+                    text,
+                });
+            }
+            "Page.javascriptDialogOpening" => {
+                let kind = params["type"].as_str().unwrap_or("alert").to_string();
+                let message = params["message"].as_str().unwrap_or("").to_string();
+                let default_prompt = params["defaultPrompt"].as_str().map(|s| s.to_string());
+                let action = self.dialog_action.lock().unwrap().clone();
+                let (response, text) = match action {
+                    DialogAction::Accept => ("Accept", None),
+                    DialogAction::Dismiss => ("Dismiss", None),
+                    DialogAction::Prompt(t) => ("Accept", Some(t)),
+                };
+                self.conn.fire(
+                    "Page.handleJavaScriptDialog",
+                    json!({ "action": response, "promptText": text }),
+                );
+                self.dialogs.lock().unwrap().push(DialogEvent {
+                    kind,
+                    message,
+                    default_prompt,
+                });
             }
             "Network.requestWillBeSent" => {
                 let id = params["requestId"].as_str().unwrap_or("").to_string();
@@ -219,11 +360,17 @@ impl Page {
                 let entry = RequestEntry {
                     id: id.clone(),
                     url: params["request"]["url"].as_str().unwrap_or("").to_string(),
-                    method: params["request"]["method"].as_str().unwrap_or("GET").to_string(),
+                    method: params["request"]["method"]
+                        .as_str()
+                        .unwrap_or("GET")
+                        .to_string(),
                     status: None,
                     content_type: None,
                     failed: None,
-                    resource_type: params.get("type").and_then(Value::as_str).map(|s| s.to_string()),
+                    resource_type: params
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string()),
                 };
                 self.requests.lock().unwrap().insert(id, entry);
             }
@@ -300,18 +447,27 @@ impl Page {
                     .await?;
             }
             if let Some(ua) = self.opts.ua.clone() {
-                let _ = s.send("Network.setUserAgentOverride", json!({ "userAgent": ua })).await?;
+                let _ = s
+                    .send("Network.setUserAgentOverride", json!({ "userAgent": ua }))
+                    .await?;
             }
         }
         if let Some(locale) = self.opts.locale.clone() {
-            let _ = s.send("Emulation.setLocaleOverride", json!({ "locale": locale })).await?;
+            let _ = s
+                .send("Emulation.setLocaleOverride", json!({ "locale": locale }))
+                .await?;
         }
         if let Some(tz) = self.opts.timezone.clone() {
-            let _ = s.send("Emulation.setTimezoneOverride", json!({ "timezoneId": tz })).await?;
+            let _ = s
+                .send("Emulation.setTimezoneOverride", json!({ "timezoneId": tz }))
+                .await?;
         }
         if !self.opts.block_urls.is_empty() {
             let _ = s
-                .send("Network.setBlockedURLs", json!({ "urls": self.opts.block_urls }))
+                .send(
+                    "Network.setBlockedURLs",
+                    json!({ "urls": self.opts.block_urls }),
+                )
                 .await?;
         }
         Ok(())
@@ -329,11 +485,14 @@ impl Page {
         if let Some(referer) = &opts.referer {
             nav_params["referrer"] = json!(referer);
         }
-        let res = self.conn.send_timeout("Page.navigate", nav_params, timeout).await?;
-        if let Some(err) = res.get("errorText").and_then(Value::as_str) {
-            if !err.is_empty() {
-                return Err(anyhow!("goto {url}: {err}"));
-            }
+        let res = self
+            .conn
+            .send_timeout("Page.navigate", nav_params, timeout)
+            .await?;
+        if let Some(err) = res.get("errorText").and_then(Value::as_str)
+            && !err.is_empty()
+        {
+            return Err(anyhow!("goto {url}: {err}"));
         }
 
         match wait_until {
@@ -355,6 +514,7 @@ impl Page {
             url: self.url.lock().unwrap().clone(),
             status: *self.last_doc_status.lock().unwrap(),
             ms: t0.elapsed().as_millis(),
+            attempts: vec![],
         })
     }
 
@@ -453,9 +613,8 @@ impl Page {
     /// Call the in-page engine: __vlx.<fn>(args…) with the engine auto-injected.
     async fn vlx(self: &Arc<Self>, call: String) -> Result<Value> {
         self.ensure_engine().await;
-        let expr = format!(
-            "(function(){{ if (!window.__vlx) {{ {ENGINE_SOURCE} }} return {call} }})()"
-        );
+        let expr =
+            format!("(function(){{ if (!window.__vlx) {{ {ENGINE_SOURCE} }} return {call} }})()");
         let res = self
             .conn
             .send(
@@ -478,7 +637,12 @@ impl Page {
     }
 
     pub async fn title(self: &Arc<Self>) -> Result<String> {
-        Ok(self.eval("document.title").await?.as_str().unwrap_or("").to_string())
+        Ok(self
+            .eval("document.title")
+            .await?
+            .as_str()
+            .unwrap_or("")
+            .to_string())
     }
 
     pub async fn content(self: &Arc<Self>) -> Result<String> {
@@ -507,7 +671,11 @@ impl Page {
     }
 
     pub async fn count(self: &Arc<Self>, sel: &str) -> Result<u64> {
-        Ok(self.vlx(format!("__vlx.count({})", json_str(sel))).await?.as_u64().unwrap_or(0))
+        Ok(self
+            .vlx(format!("__vlx.count({})", json_str(sel)))
+            .await?
+            .as_u64()
+            .unwrap_or(0))
     }
 
     /// Batch extraction: spec = {text, html, tag, attrs: [...], limit}
@@ -534,6 +702,10 @@ impl Page {
         Ok(v.as_bool().unwrap_or(false))
     }
 
+    pub async fn dialogs(&self) -> Vec<DialogEvent> {
+        self.dialogs.lock().unwrap().clone()
+    }
+
     pub async fn console(&self) -> Vec<ConsoleMessage> {
         self.console.lock().unwrap().clone()
     }
@@ -554,10 +726,19 @@ impl Page {
             .await;
         match res {
             Ok(r) => {
-                let b64 = r.get("base64Encoded").and_then(Value::as_bool).unwrap_or(false);
-                let body = r.get("body").and_then(Value::as_str).unwrap_or("").to_string();
+                let b64 = r
+                    .get("base64Encoded")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let body = r
+                    .get("body")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
                 if b64 {
-                    Ok(Some(String::from_utf8_lossy(&b64_decode(&body)?).to_string()))
+                    Ok(Some(
+                        String::from_utf8_lossy(&b64_decode(&body)?).to_string(),
+                    ))
                 } else {
                     Ok(Some(body))
                 }
@@ -569,7 +750,10 @@ impl Page {
     /// Cookies for the current page URL (Storage fallback when empty).
     pub async fn cookies(self: &Arc<Self>) -> Result<Vec<Cookie>> {
         let url = self.url();
-        let mut res = self.conn.send("Network.getCookies", json!({ "urls": [url] })).await?;
+        let mut res = self
+            .conn
+            .send("Network.getCookies", json!({ "urls": [url] }))
+            .await?;
         let mut list = res["cookies"].as_array().cloned().unwrap_or_default();
         if list.is_empty() {
             res = self.conn.send("Storage.getCookies", json!({})).await?;
@@ -579,7 +763,10 @@ impl Page {
     }
 
     pub async fn set_cookies(self: &Arc<Self>, cookies: Vec<Cookie>) -> Result<()> {
-        let values: Vec<Value> = cookies.iter().map(|c| serde_json::to_value(c).unwrap()).collect();
+        let values: Vec<Value> = cookies
+            .iter()
+            .map(|c| serde_json::to_value(c).unwrap())
+            .collect();
         self.conn
             .send("Network.setCookies", json!({ "cookies": values }))
             .await?;
@@ -587,7 +774,9 @@ impl Page {
     }
 
     pub async fn clear_cookies(self: &Arc<Self>) -> Result<()> {
-        self.conn.send("Network.clearBrowserCookies", json!({})).await?;
+        self.conn
+            .send("Network.clearBrowserCookies", json!({}))
+            .await?;
         Ok(())
     }
 
@@ -663,6 +852,150 @@ impl Page {
         b64_decode(data)
     }
 
+    /// Human-like interaction handle (bezier moves, jitter typing, warmup, hold).
+    pub fn human(self: &Arc<Self>) -> crate::human::Human {
+        crate::human::Human::new(self.clone())
+    }
+
+    /// Structured detection of the anti-bot widget on this page.
+    pub async fn detect_challenge(
+        self: &Arc<Self>,
+        wait: bool,
+        timeout: Duration,
+    ) -> Result<super::challenge::ChallengeInfo> {
+        super::challenge::detect(self, wait, timeout, Duration::from_millis(500)).await
+    }
+
+    /// Wait for a captcha token field to populate; diagnoses its state on timeout.
+    pub async fn wait_for_captcha_token(
+        self: &Arc<Self>,
+        selector: Option<&str>,
+        timeout: Duration,
+    ) -> Result<String> {
+        super::challenge::wait_for_token(
+            self,
+            selector,
+            timeout,
+            Duration::from_millis(250),
+            Duration::from_secs(15),
+        )
+        .await
+    }
+
+    /// Wait for an arbitrary JS expression to become truthy (polled in-page).
+    pub async fn wait_for_function(self: &Arc<Self>, js: &str, timeout: Duration) -> Result<Value> {
+        let expr = format!("__vlx.waitExpr({}, {})", json_str(js), timeout.as_millis());
+        self.vlx(expr).await
+    }
+
+    /// Navigate with backoff — flaky residential proxies are the normal case.
+    pub async fn goto_with_retry(
+        self: &Arc<Self>,
+        url: &str,
+        retries: usize,
+        timeout: Duration,
+    ) -> Result<Nav> {
+        let mut delay = 400u64;
+        let mut attempts: Vec<Value> = vec![];
+        for i in 0..=retries {
+            let t0 = Instant::now();
+            match self
+                .goto(
+                    url,
+                    GotoOpts {
+                        wait_until: Some(WaitUntil::Interactive),
+                        timeout: Some(timeout),
+                        referer: None,
+                    },
+                )
+                .await
+            {
+                Ok(nav) => {
+                    attempts.push(json!({ "attempt": i + 1, "ms": t0.elapsed().as_millis(), "status": nav.status }));
+                    let mut with_attempts = nav;
+                    with_attempts.attempts = attempts;
+                    return Ok(with_attempts);
+                }
+                Err(e) => {
+                    attempts.push(json!({ "attempt": i + 1, "ms": t0.elapsed().as_millis(), "error": e.to_string() }));
+                    let retryable = RETRYABLE_RE.is_match(&e.to_string());
+                    if i == retries || !retryable {
+                        return Err(e);
+                    }
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
+                    delay *= 2;
+                }
+            }
+        }
+        unreachable!()
+    }
+
+    /// Frames: flattened Page.getFrameTree (main frame first).
+    pub async fn frames(self: &Arc<Self>) -> Result<Vec<Value>> {
+        let res = self.conn.send("Page.getFrameTree", json!({})).await?;
+        let mut out = vec![];
+        walk_frames(&res["frameTree"], 0, &mut out);
+        Ok(out)
+    }
+
+    /// Screenshot of one element (clip from its rect via the in-page engine).
+    pub async fn screenshot_element(self: &Arc<Self>, sel: &str) -> Result<Vec<u8>> {
+        self.ensure_engine().await;
+        let rect = self.eval(&format!("__vlx.rect({})", json_str(sel))).await?;
+        let x = rect.get("x").and_then(Value::as_f64).unwrap_or(0.0);
+        let y = rect.get("y").and_then(Value::as_f64).unwrap_or(0.0);
+        let w = rect.get("width").and_then(Value::as_f64).unwrap_or(0.0);
+        let h = rect.get("height").and_then(Value::as_f64).unwrap_or(0.0);
+        if w <= 0.0 || h <= 0.0 {
+            return Err(anyhow!("element not visible: {sel}"));
+        }
+        let params = json!({
+            "format": "png",
+            "clip": { "x": x, "y": y, "width": w.min(16384.0), "height": h.min(16384.0), "scale": 1 },
+        });
+        let res = self.conn.send("Page.captureScreenshot", params).await?;
+        let data = res
+            .get("data")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("captureScreenshot returned no data"))?;
+        b64_decode(data)
+    }
+
+    /// HAR 1.2 export from the captured requests (bodies optional).
+    pub async fn har(self: &Arc<Self>, with_bodies: bool) -> Result<Value> {
+        let reqs = self.requests().await;
+        let mut entries = vec![];
+        for r in reqs {
+            let mut body = json!(null);
+            if with_bodies {
+                body = json!(self.body(&r.id).await.unwrap_or(None));
+            }
+            entries.push(json!({
+                "startedDateTime": "1970-01-01T00:00:00Z",
+                "time": 0,
+                "request": { "method": r.method, "url": r.url, "httpVersion": "http/1.1", "headers": [], "queryString": [], "headersSize": -1, "bodySize": -1 },
+                "response": {
+                    "status": r.status.unwrap_or(0), "statusText": "", "httpVersion": "http/1.1",
+                    "headers": [{ "name": "content-type", "value": r.content_type.clone().unwrap_or_default() }],
+                    "content": { "size": -1, "mimeType": r.content_type.clone().unwrap_or_default(), "text": body },
+                    "headersSize": -1, "bodySize": -1, "redirectURL": "",
+                },
+                "cache": {},
+                "timings": { "send": 0, "wait": 0, "receive": 0 },
+                "_resourceType": r.resource_type,
+                "_failed": r.failed,
+            }));
+        }
+        Ok(json!({
+            "log": {
+                "version": "1.2",
+                "creator": { "name": "velox-rs", "version": env!("CARGO_PKG_VERSION") },
+                "pages": [],
+                "entries": entries,
+            }
+        }))
+    }
+
     pub async fn close(self: Arc<Self>) {
         self.conn.close().await;
     }
@@ -672,16 +1005,50 @@ fn json_str(s: &str) -> String {
     serde_json::to_string(s).unwrap()
 }
 
+static RETRYABLE_RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+    regex::Regex::new(r"(?i)timeout|ERR_|ECONN|closed|Tunnel|SSL|reset|502|503|504").unwrap()
+});
+
+fn walk_frames(node: &Value, depth: usize, out: &mut Vec<Value>) {
+    let f = &node["frame"];
+    if !f.is_null() {
+        out.push(json!({
+            "id": f["id"], "url": f["url"], "name": f.get("name").cloned().unwrap_or(Value::Null),
+            "parentId": f.get("parentId").cloned().unwrap_or(Value::Null), "depth": depth,
+        }));
+    }
+    if let Some(children) = node.get("childFrames").and_then(Value::as_array) {
+        for c in children {
+            walk_frames(c, depth + 1, out);
+        }
+    }
+}
+
 fn parse_cookie(v: Value) -> Option<Cookie> {
     Some(Cookie {
         name: v.get("name")?.as_str()?.to_string(),
-        value: v.get("value").and_then(Value::as_str).unwrap_or("").to_string(),
-        domain: v.get("domain").and_then(Value::as_str).unwrap_or("").to_string(),
-        path: v.get("path").and_then(Value::as_str).unwrap_or("/").to_string(),
+        value: v
+            .get("value")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        domain: v
+            .get("domain")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        path: v
+            .get("path")
+            .and_then(Value::as_str)
+            .unwrap_or("/")
+            .to_string(),
         expires: v.get("expires").and_then(Value::as_f64),
         http_only: v.get("httpOnly").and_then(Value::as_bool).unwrap_or(false),
         secure: v.get("secure").and_then(Value::as_bool).unwrap_or(false),
-        same_site: v.get("sameSite").and_then(Value::as_str).map(|s| s.to_string()),
+        same_site: v
+            .get("sameSite")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string()),
     })
 }
 
@@ -705,7 +1072,8 @@ pub fn normalize_cookies(mut list: Vec<Cookie>) -> Vec<Cookie> {
     for c in list.drain(..) {
         let mut c = c;
         let bare = c.domain.trim_start_matches('.').to_lowercase();
-        let is_ip = bare.split('.').count() == 4 && bare.split('.').all(|p| p.parse::<u8>().is_ok());
+        let is_ip =
+            bare.split('.').count() == 4 && bare.split('.').all(|p| p.parse::<u8>().is_ok());
         if !bare.is_empty() {
             if !is_ip && !bare.starts_with('.') {
                 c.domain = format!(".{bare}");
