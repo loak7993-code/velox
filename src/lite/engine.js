@@ -5,6 +5,7 @@ import https from 'node:https';
 import zlib from 'node:zlib';
 import { parse, decodeEntities } from './html.js';
 import { agentsFor } from './proxy-agent.js';
+import { mapConcurrent } from '../util.js';
 
 const agents = {
   http: new http.Agent({ keepAlive: true, maxSockets: 64, maxFreeSockets: 16 }),
@@ -221,21 +222,13 @@ function stripTags(html) {
  */
 export async function fetchAll(urls, opts = {}) {
   const { concurrency = 8, throwOnError = false, ...fetchOpts } = opts;
-  const list = [...urls];
-  const out = new Array(list.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.max(1, Math.min(concurrency, list.length)) }, async () => {
-    for (;;) {
-      const i = cursor++;
-      if (i >= list.length) return;
-      try {
-        out[i] = await fetch(typeof list[i] === 'string' ? list[i] : list[i].url, { ...fetchOpts, ...(typeof list[i] === 'object' ? list[i] : {}) });
-      } catch (e) {
-        if (throwOnError) throw e;
-        out[i] = { error: e, url: typeof list[i] === 'string' ? list[i] : list[i].url, status: 0, text: () => '', json: () => { throw e; } };
-      }
+  return mapConcurrent([...urls], concurrency, async (item) => {
+    const url = typeof item === 'string' ? item : item.url;
+    try {
+      return await fetch(url, { ...fetchOpts, ...(typeof item === 'object' ? item : {}) });
+    } catch (e) {
+      if (throwOnError) throw e;
+      return { error: e, url, status: 0, text: () => '', json: () => { throw e; } };
     }
   });
-  await Promise.all(workers);
-  return out;
 }

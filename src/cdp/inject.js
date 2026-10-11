@@ -510,6 +510,3 @@ export const ENGINE_SOURCE_RAW = String.raw`
 
 /** Readable source kept for debugging; pages receive the compacted form. */
 export const ENGINE_SOURCE = compactSource(ENGINE_SOURCE_RAW);
-
-
-export const ENGINE_CHECK = `typeof window.__vlx === 'object'`;

@@ -1,6 +1,7 @@
 // velox :: cdp/context.js — BrowserContext: isolated cookie/profile worlds per browser
-import { Emitter } from '../util.js';
+import { Emitter, globToRe } from '../util.js';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { APIRequestContext } from './request.js';
 
 let ctxSeq = 1;
@@ -127,7 +128,7 @@ export class BrowserContext extends Emitter {
       if (localStorage.length) origins.push({ origin, localStorage });
     }
     const state = { cookies, origins };
-    if (path) { mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, JSON.stringify(state, null, 2)); }
+    if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(state, null, 2)); }
     return state;
   }
   async setStorageState(stateOrPath) {
@@ -181,7 +182,7 @@ export class BrowserContext extends Emitter {
     const events = this._tracing ? this._tracing.events : [];
     this._tracing = null;
     const trace = { traceEvents: events };
-    if (path) { mkdirSync(dirnameOf(path), { recursive: true }); writeFileSync(path, JSON.stringify(trace)); }
+    if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, JSON.stringify(trace)); }
     return trace;
   }
 
@@ -193,12 +194,4 @@ export class BrowserContext extends Emitter {
     if (this.id) await this.browser.conn.send('Target.disposeBrowserContext', { browserContextId: this.id }).catch(() => {});
     this.emit('close');
   }
-}
-
-function globToRe(glob) {
-  return new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^]*').replace(/\u0000/g, '[^]*').replace(/\?/g, '.') + '$');
-}
-function dirnameOf(p) {
-  const i = p.lastIndexOf('/');
-  return i <= 0 ? '.' : p.slice(0, i);
 }

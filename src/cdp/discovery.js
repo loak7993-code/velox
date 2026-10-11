@@ -63,11 +63,6 @@ export function discoverBrowsers() {
     for (const dir of NIX_PATHS) for (const name of NIX) {
       const p = `${dir}/${name}`;
       if (exists(p)) add(p, name);
-      // snap wrappers are often dead in containers — verify ONLY those execute
-      // (a spawn costs ~100ms; native binaries are proven files, don't spawn)
-      if (p.includes('/snap/') && exists(p)) {
-        try { execSync(`"${p}" --version`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 8000 }); } catch { /* dead wrapper: leave it out */ }
-      }
     }
     add(`${homedir()}/.cache/puppeteer/chrome-headless-shell`, 'chrome-headless-shell'); // scanned deeper below
     add('/usr/lib/chromium-browser/chromium-browser', 'chromium');

@@ -1,7 +1,5 @@
 // velox :: cdp/clock.js — virtual clock: fake Date/time + virtual timers,
 // injected as an init script. fastForward() fires due timers without waiting.
-import { Emitter } from '../util.js';
-
 import { compactSource } from '../util.js';
 export const CLOCK_SOURCE_RAW = String.raw`
 (function () {

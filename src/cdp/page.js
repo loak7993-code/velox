@@ -2,11 +2,10 @@
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Emitter, sleep, withTimeout, TimeoutError, randInt, humanDelay } from '../util.js';
+import { Emitter, sleep, withTimeout, TimeoutError, globToRe, mapConcurrent, cookieHeader } from '../util.js';
 import { ENGINE_SOURCE } from './inject.js';
 import { STEALTH_SOURCE, resolveStealth, buildStealthSource, alignVersion } from './stealth.js';
 import { DEVICES } from './devices.js';
-import { buildHar } from './har.js';
 import { Locator, byRoleSel, byTextSel, byLabelSel, byPlaceholderSel, byAltTextSel, byTitleSel, byTestIdSel } from './locator.js';
 import { JSHandle, ElementHandle, buildEvalExpr } from './handles.js';
 import { videoApi } from './screencast.js';
@@ -14,34 +13,22 @@ import { Coverage } from './coverage.js';
 import { Accessibility } from './accessibility.js';
 import { Clock, CLOCK_SOURCE } from './clock.js';
 import { getConfig, applyPageOptions, runHook, hasHook, registeredDevices } from '../plugins.js';
-import { resolveBandwidth, sameSite, fmtBytes } from '../bandwidth.js';
+import { resolveBandwidth, sameSite } from '../bandwidth.js';
 import { attachHuman } from '../human.js';
 import { attachChallenge } from '../challenge.js';
-import { applyExtensions, makeExtNamespace, chainFor, selectorEngineSource, runHooks } from '../extend.js';
-import { attachFieldHelpers, asResponse, takePendingSession } from '../field.js';
+import { makeExtNamespace, chainFor, selectorEngineSource, runHooks } from '../extend.js';
+import { attachFieldHelpers, takePendingSession } from '../field.js';
+import { keyboardOf, mouseOf, touchOf } from './input.js';
+import { screenshot as _screenshot, pdf as _pdf } from './capture.js';
+import { Download } from './download.js';
+import { WebSocketTracker } from './websocket.js';
+import {
+  _onRequest, _onResponse, _onDone,
+  requests, body, har, transferred, blockedRequests,
+  waitForRequest, waitForResponse, waitForRequestFinished,
+} from './nettrack.js';
 
-const KEYMAP = {
-  enter: { key: 'Enter', code: 'Enter', keyCode: 13, text: '\r' },
-  tab: { key: 'Tab', code: 'Tab', keyCode: 9 },
-  escape: { key: 'Escape', code: 'Escape', keyCode: 27 },
-  backspace: { key: 'Backspace', code: 'Backspace', keyCode: 8 },
-  delete: { key: 'Delete', code: 'Delete', keyCode: 46 },
-  arrowup: { key: 'ArrowUp', code: 'ArrowUp', keyCode: 38 },
-  arrowdown: { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40 },
-  arrowleft: { key: 'ArrowLeft', code: 'ArrowLeft', keyCode: 37 },
-  arrowright: { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 },
-  home: { key: 'Home', code: 'Home', keyCode: 36 },
-  end: { key: 'End', code: 'End', keyCode: 35 },
-  pageup: { key: 'PageUp', code: 'PageUp', keyCode: 33 },
-  pagedown: { key: 'PageDown', code: 'PageDown', keyCode: 34 },
-  shift: { key: 'Shift', code: 'ShiftLeft', keyCode: 16, location: 1 },
-  control: { key: 'Control', code: 'ControlLeft', keyCode: 17, location: 1 },
-  alt: { key: 'Alt', code: 'AltLeft', keyCode: 18, location: 1 },
-  meta: { key: 'Meta', code: 'MetaLeft', keyCode: 91, location: 1 },
-  space: { key: ' ', code: 'Space', keyCode: 32, text: ' ' },
-};
-
-const globToRe = (glob) => new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^]*').replace(/\u0000/g, '[^]*').replace(/\?/g, '.') + '$');
+export { Download, WebSocketTracker };
 
 export class VeloxPage extends Emitter {
   constructor(browser, sessionId, targetInfo, extra = {}) {
@@ -636,6 +623,15 @@ export class VeloxPage extends Emitter {
       : 'undefined';
   }
   _x(fn, ...args) { return `__vlx.${fn}(${args.map((a) => JSON.stringify(a)).join(',')}${this._rootOverride ? `,${this._root()}` : ''})`; }
+  /** Locator-filtered variant: `_fx('point', sel, filters)` → `__vlx.point(pick(sel, filters))`,
+   *  falling back to the plain form when no filters are set. */
+  _fx(fn, sel, _filters, ...args) {
+    if (_filters && Object.keys(_filters).length) {
+      const extra = args.length ? ',' + args.map((a) => JSON.stringify(a)).join(',') : '';
+      return `__vlx.${fn}(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)})${extra})`;
+    }
+    return this._x(fn, sel, ...args);
+  }
 
   /** True when the engine is live in the current document (re-injects if a page wiped it). */
   async _ensureEngine() {
@@ -688,19 +684,8 @@ export class VeloxPage extends Emitter {
    *   await page.batch([['click','#a'], ['fill','#b','x'], ['text','h1']]);
    */
   async batch(actions, { concurrency = 0 } = {}) {
-    const run = (a) => (typeof a === 'function' ? a(this) : this[a[0]].apply(this, a.slice(1)));
-    const list = actions.map((a, i) => ({ a, i }));
-    if (!concurrency || concurrency >= list.length) return Promise.all(list.map(({ a }) => run(a)));
-    const out = new Array(actions.length);
-    let cursor = 0;
-    await Promise.all(Array.from({ length: concurrency }, async () => {
-      for (;;) {
-        const idx = cursor++;
-        if (idx >= actions.length) return;
-        out[idx] = await run(actions[idx]);
-      }
-    }));
-    return out;
+    return mapConcurrent(actions, concurrency || actions.length, (a) =>
+      typeof a === 'function' ? a(this) : this[a[0]].apply(this, a.slice(1)));
   }
 
   /**
@@ -806,11 +791,9 @@ export class VeloxPage extends Emitter {
   async click(sel, opts = {}) {
     const { button = 'left', clicks = 1, modifiers = [], delay = 0, inPage = false, _filters } = opts;
     const { timeout } = this._to(opts);
-    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `click ${sel}`).catch((e) => { if (e instanceof TimeoutError && timeout <= 0) {} else throw e; });
-    if (inPage) { await this.eval(this._x('clickInPage', sel)); return; }
-    const p = await this.evalSync(_filters && Object.keys(_filters).length
-      ? `__vlx.point(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}))`
-      : this._x('point', sel));
+    await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `click ${sel}`);
+    if (inPage) { await this.eval(this._x('clickInPage', sel)); return this; }
+    const p = await this.evalSync(this._fx('point', sel, _filters));
     if (!p) throw new Error(`Not clickable: ${sel}`);
     await this.mouse.click(p.x, p.y, { button, clicks, modifiers, delay });
     return this;
@@ -829,9 +812,7 @@ export class VeloxPage extends Emitter {
     const { _filters } = opts;
     const { timeout } = this._to(opts);
     await withTimeout(this.waitForSelector(sel, { timeout, _filters }), timeout, `fill ${sel}`);
-    const ok = await this.evalSync(_filters && Object.keys(_filters).length
-      ? `__vlx.fill(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}), ${JSON.stringify(value)})`
-      : this._x('fill', sel, value));
+    const ok = await this.evalSync(this._fx('fill', sel, _filters, value));
     if (!ok) throw new Error(`Cannot fill: ${sel}`);
     return this;
   }
@@ -841,9 +822,7 @@ export class VeloxPage extends Emitter {
     const { delay = 0, human = false, _filters } = opts;
     const { timeout } = this._to(opts);
     await withTimeout(this.waitForSelector(sel, { timeout, state: 'visible', _filters }), timeout, `type ${sel}`);
-    await this.evalSync(_filters && Object.keys(_filters).length
-      ? `__vlx.focus(__vlx.pick(${JSON.stringify(sel)},${JSON.stringify(_filters)}))`
-      : this._x('focus', sel));
+    await this.evalSync(this._fx('focus', sel, _filters));
     for (const ch of String(text)) {
       await this.keyboard.sendChar(ch);
       if (human) await humanDelay(delay || 70);
@@ -854,12 +833,8 @@ export class VeloxPage extends Emitter {
 
   /** Mouse-based drag & drop between two selectors (HTML5 and mouse-driven UIs). */
   async dragAndDrop(source, target, { steps = 12, _srcFilters, _dstFilters } = {}) {
-    const srcExpr = _srcFilters && Object.keys(_srcFilters).length
-      ? `__vlx.point(__vlx.pick(${JSON.stringify(source)},${JSON.stringify(_srcFilters)}))`
-      : this._x('point', source);
-    const dstExpr = _dstFilters && Object.keys(_dstFilters).length
-      ? `__vlx.point(__vlx.pick(${JSON.stringify(target)},${JSON.stringify(_dstFilters)}))`
-      : this._x('point', target);
+    const srcExpr = this._fx('point', source, _srcFilters);
+    const dstExpr = this._fx('point', target, _dstFilters);
     await withTimeout(this.waitForSelector(source, { timeout: 10000, state: 'visible', _filters: _srcFilters }), 10000, `drag ${source}`);
     await withTimeout(this.waitForSelector(target, { timeout: 10000, state: 'attached', _filters: _dstFilters }), 10000, `drop ${target}`);
     const [a, b] = await Promise.all([this.evalSync(srcExpr), this.evalSync(dstExpr)]);
@@ -888,103 +863,23 @@ export class VeloxPage extends Emitter {
 
   async scrollBy(dx, dy) { return this.eval(`__vlx.scrollBy(${dx},${dy})`); }
   async scrollToBottom() {
+    // stop when the scroll position stops advancing (bottom reached) — the viewport
+    // height is a page-side value, so it is never read in Node scope
+    let last = -1;
     for (;;) {
       const [x, y, h, more] = await this.evalSync('__vlx.scrollTop()');
-      if (!more || y + innerHeight >= h - 2) break;
+      if (!more || y === last) break;
+      last = y;
       await this.eval(`__vlx.scrollBy(0, ${Math.min(1200, h - y)})`);
       await sleep(120);
     }
   }
 
-  get keyboard() {
-    const self = this;
-    return {
-      async down(k) { self._modifiers |= 0; return self.session.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...normKey(k, 'down') }); },
-      async up(k) { return self.session.send('Input.dispatchKeyEvent', { type: 'keyUp', ...normKey(k, 'up') }); },
-      async press(k) {
-        await self.session.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...normKey(k, 'down') });
-        if (KEYMAP[String(k).toLowerCase()]?.text) await self.session.send('Input.dispatchKeyEvent', { type: 'keyDown', ...normKey(k, 'down'), text: KEYMAP[String(k).toLowerCase()].text });
-        await self.session.send('Input.dispatchKeyEvent', { type: 'keyUp', ...normKey(k, 'up') });
-      },
-      async sendChar(ch) {
-        const code = /[a-z0-9]/i.test(ch) ? 'Key' + ch.toUpperCase() : undefined;
-        await self.session.send('Input.dispatchKeyEvent', {
-          type: 'keyDown', key: ch, text: ch, unmodifiedText: ch,
-          windowsVirtualKeyCode: ch.length === 1 ? ch.toUpperCase().charCodeAt(0) : undefined, ...(code ? { code } : {}),
-        });
-        await self.session.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch, ...(code ? { code } : {}) });
-      },
-      async type(text, { delay = 0, human = false } = {}) {
-        for (const ch of String(text)) { await this.sendChar(ch); if (human) await humanDelay(delay || 60); else if (delay) await sleep(delay); }
-      },
-      async insertText(text) { return self.session.send('Input.insertText', { text: String(text) }); },
-    };
-  }
+  get keyboard() { return this._kb || (this._kb = keyboardOf(this)); }
 
-  get mouse() {
-    const self = this;
-    const BTN = { left: 1, middle: 4, right: 2, none: 0 };
-    return {
-      async move(x, y, { steps = 1 } = {}) {
-        const from = { ...self._mouse };
-        for (let i = 1; i <= steps; i++) {
-          const nx = from.x + (x - from.x) * (i / steps), ny = from.y + (y - from.y) * (i / steps);
-          await self.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: nx, y: ny, button: 'none' });
-        }
-        self._mouse = { x, y };
-      },
-      async click(x, y, { button = 'left', clicks = 1, modifiers = [], delay = 10 } = {}) {
-        const mod = modifiers.reduce((m, k) => m | ({ alt: 1, ctrl: 2, meta: 4, shift: 8 }[k] || 0), 0);
-        await this.move(x, y, { steps: 2 });
-        for (let c = 0; c < clicks; c++) {
-          await self.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1, modifiers: mod });
-          if (delay) await sleep(delay);
-          await self.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1, modifiers: mod });
-          if (c < clicks - 1 && delay) await sleep(delay * 2);
-        }
-      },
-      async dblclick(x, y, o = {}) { return this.click(x, y, { ...o, clicks: 2 }); },
-      async down(button = 'left') { return self.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: self._mouse.x, y: self._mouse.y, button, clickCount: 1 }); },
-      async up(button = 'left') { return self.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: self._mouse.x, y: self._mouse.y, button, clickCount: 1 }); },
-      async wheel(dx, dy) { return self.session.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: self._mouse.x, y: self._mouse.y, deltaX: dx, deltaY: dy }); },
-      async humanMove(x, y, { steps } = {}) {
-        // bezier-ish human cursor path
-        const n = steps || randInt(15, 30);
-        const from = { ...self._mouse };
-        const cx = (from.x + x) / 2 + randInt(-80, 80), cy = (from.y + y) / 2 + randInt(-80, 80);
-        for (let i = 1; i <= n; i++) {
-          const t = i / n, u = 1 - t;
-          const nx = u * u * from.x + 2 * u * t * cx + t * t * x;
-          const ny = u * u * from.y + 2 * u * t * cy + t * t * y;
-          await self.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: nx, y: ny, button: 'none' });
-          await sleep(randInt(4, 14));
-        }
-        self._mouse = { x, y };
-      },
-    };
-  }
+  get mouse() { return this._mouseApi || (this._mouseApi = mouseOf(this)); }
 
-  get touch() {
-    const self = this;
-    return {
-      async tap(x, y) {
-        const points = [{ x, y }];
-        await self.session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points });
-        await self.session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      },
-      async swipe(x1, y1, x2, y2, { steps = 12 } = {}) {
-        await self.session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x1, y: y1 }] });
-        for (let i = 1; i <= steps; i++) {
-          await self.session.send('Input.dispatchTouchEvent', {
-            type: 'touchMove',
-            touchPoints: [{ x: x1 + (x2 - x1) * i / steps, y: y1 + (y2 - y1) * i / steps }],
-          });
-          await sleep(16);
-        }
-        await self.session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      },
-    };
-  }
+  get touch() { return this._touchApi || (this._touchApi = touchOf(this)); }
 
   /* ----------------------------------------------- document --------------------------------------------- */
 
@@ -1062,58 +957,7 @@ export class VeloxPage extends Emitter {
 
   /* ---------------------------------------------- screenshots -------------------------------------------- */
 
-  async screenshot({ path, full = false, selector, type = 'png', quality = 80, fast = false, clip, mask, animations } = {}) {
-    let maskId = null, froze = false;
-    try {
-      if (animations === 'disabled') { froze = true; await this.evalSync('__vlx.freezeAnimations()'); }
-      if (mask?.length) { maskId = await this.evalSync(`__vlx.mask(${JSON.stringify(mask)})`); }
-      let clipArg = clip || undefined;
-      if (selector) {
-        const r = await this.evalSync(this._x('rect', selector));
-        if (!r) throw new Error(`No element for screenshot: ${selector}`);
-        const [sx, sy] = await this.evalSync('[scrollX, scrollY]');
-        clipArg = { x: r.x + sx, y: r.y + sy, width: r.width, height: r.height, scale: 1 };
-      } else if (full) {
-        let cs = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const m = await this.session.send('Page.getLayoutMetrics');
-          cs = m.cssContentSize || m.contentSize;
-          if (cs && cs.width > 0 && cs.height > 0) break;
-          await sleep(120); // layout not ready yet (page just navigated)
-        }
-        if (!cs || cs.width <= 0 || cs.height <= 0) {
-          const v = await this.session.send('Page.getLayoutMetrics');
-          cs = v.cssVisualViewport || v.contentSize || { width: 1280, height: 720 };
-        }
-        clipArg = { x: 0, y: 0, width: Math.max(1, Math.ceil(cs.width)), height: Math.max(1, Math.ceil(cs.height)), scale: 1 };
-      }
-      const { data } = await this.session.send('Page.captureScreenshot', {
-        format: type, quality: type === 'jpeg' ? quality : undefined,
-        ...(clipArg ? { clip: clipArg, captureBeyondViewport: true } : {}),
-        ...(fast && type === 'png' ? { optimizeForSpeed: true } : {}),
-      });
-      if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(data, 'base64')); }
-      return Buffer.from(data, 'base64');
-    } finally {
-      if (maskId) await this.evalSync(`__vlx.unmask(${JSON.stringify(maskId)})`).catch(() => {});
-      if (froze) await this.evalSync('__vlx.unfreezeAnimations()').catch(() => {});
-    }
-  }
-
-  async pdf({ path, format = 'A4', landscape = false, printBackground = true, margin, scale = 1, headerTemplate, footerTemplate, preferCSSPageSize = false } = {}) {
-    const PAPER = { A4: [8.27, 11.69], Letter: [8.5, 11], Legal: [8.5, 14], Tabloid: [11, 17] };
-    const [w, h] = PAPER[format] || (typeof format === 'object' ? format : PAPER.A4);
-    const { data } = await this.session.send('Page.printToPDF', {
-      landscape, printBackground, scale, preferCSSPageSize,
-      paperWidth: w, paperHeight: h,
-      marginTop: margin?.top ?? 0.4, marginBottom: margin?.bottom ?? 0.4,
-      marginLeft: margin?.left ?? 0.4, marginRight: margin?.right ?? 0.4,
-      displayHeaderFooter: !!(headerTemplate || footerTemplate),
-      headerTemplate: headerTemplate || '<span></span>', footerTemplate: footerTemplate || '<span></span>',
-    });
-    if (path) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, Buffer.from(data, 'base64')); }
-    return Buffer.from(data, 'base64');
-  }
+  // screenshot() and pdf() live in capture.js (assigned onto the prototype below)
 
   /* ----------------------------------------------- emulation --------------------------------------------- */
 
@@ -1214,83 +1058,8 @@ export class VeloxPage extends Emitter {
 
   /* ------------------------------------------------ network ---------------------------------------------- */
 
-  _onRequest({ requestId, request, type, frameId, redirectResponse, timestamp, wallTime }) {
-    const existing = this._requests.get(requestId);
-    if (existing && redirectResponse) {
-      // same requestId continues after a redirect: close the hop, chain it, keep counting inflight
-      (existing.redirectChain ||= []).push({ url: existing.url, status: redirectResponse.status, headers: redirectResponse.headers });
-      existing.response = { status: redirectResponse.status, headers: redirectResponse.headers, url: redirectResponse.url };
-      existing.done = true; existing.encodedDataLength = redirectResponse.encodedDataLength;
-    }
-    if (!existing || redirectResponse) {
-      const entry = {
-        id: requestId, url: request.url, method: request.method, headers: request.headers,
-        resourceType: type, frameId, postData: request.postData, wallTime,
-        response: null, done: false, body: undefined, failed: null, page: this,
-        ...(existing?.redirectChain ? { redirectChain: existing.redirectChain } : {}),
-      };
-      this._requests.set(requestId, entry);
-      if (!existing) { this._reqOrder.push(requestId); this._inflight++; }
-      this.emit('request', entry);
-    }
-    // main document tracking: requestWillBeSent can beat frameNavigated, so
-    // accept Document requests while the main frame id is still unknown
-    if (type === 'Document' && !this._docResponse && (frameId === this._mainFrameId || !this._mainFrameId)) {
-      this._docResponse = { url: request.url, status: null };
-    }
-  }
-
-  _onResponse({ requestId, response, timestamp, frameId, type }) {
-    const e = this._requests.get(requestId);
-    if (!e) return;
-    e.response = { status: response.status, statusText: response.statusText, headers: response.headers, url: response.url, remoteIP: response.remoteIPAddress, protocol: response.protocol, timing: response.timing, fromCache: response.fromDiskCache, security: response.securityDetails?.protocol };
-    if ((e.resourceType ?? type) === 'Document' && (frameId === this._mainFrameId || !this._mainFrameId)) {
-      this._docResponse = { url: response.url, status: response.status, headers: response.headers };
-    }
-    this.emit('response', e);
-  }
-
-  _onDone(requestId, timestamp, encodedDataLength, failInfo) {
-    const e = this._requests.get(requestId);
-    if (!e || e.done) return;
-    e.done = true; e.encodedDataLength = encodedDataLength ?? 0;
-    if (failInfo) { e.failed = failInfo.errorText || failInfo.blockedReason || 'failed'; e.canceled = !!failInfo.canceled; }
-    this._inflight = Math.max(0, this._inflight - 1);
-    this._checkIdle();
-    this.emit('requestfinished', e);
-  }
-
-  /** All captured requests (in order). */
-  requests({ filter } = {}) {
-    let list = this._reqOrder.map((id) => this._requests.get(id)).filter(Boolean);
-    if (filter) list = list.filter(filter);
-    return list;
-  }
-  async body(entryOrId) {
-    const e = typeof entryOrId === 'string' ? this._requests.get(entryOrId) : entryOrId;
-    if (!e) return null;
-    if (e.body !== undefined) return e.body;
-    try {
-      const { body, base64Encoded } = await this.session.send('Network.getResponseBody', { requestId: e.id });
-      e.body = base64Encoded ? Buffer.from(body, 'base64').toString('utf8') : body;
-    } catch { e.body = null; }
-    return e.body;
-  }
-  async har({ withBodies = true } = {}) {
-    const entries = this.requests();
-    const out = [];
-    for (const e of entries) {
-      let content = undefined;
-      if (withBodies && e.response && !e.failed) {
-        try {
-          const b = await this.session.send('Network.getResponseBody', { requestId: e.id }).catch(() => null);
-          if (b) content = { text: b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b.body, encoding: b.base64Encoded ? 'base64' : undefined };
-        } catch {}
-      }
-      out.push({ e, content });
-    }
-    return buildHar(out);
-  }
+  // request/response capture, bodies, HAR and network waits live in nettrack.js and are
+  // assigned onto the prototype below (same shape as before the split, still middleware-wrapped)
 
   /** Block by URL list (uses browser-native blocking — zero overhead). Supports plain domains or glob URLs. */
   async block(urls) {
@@ -1413,11 +1182,10 @@ export class VeloxPage extends Emitter {
       /** Perform the real request server-side (with page cookies) — for inspect-then-modify flows. */
       async fetch() {
         const { fetch: liteFetch } = await import('../lite/engine.js');
-        const cookies = await this.page.cookies([this.url]).catch(() => []);
-        const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+        const cookie = cookieHeader(await this.page.cookies([this.url]).catch(() => []));
         const res = await liteFetch(this.url, {
           method: this.method,
-          headers: { ...this.headers, ...(cookieHeader ? { cookie: cookieHeader } : {}) },
+          headers: { ...this.headers, ...(cookie ? { cookie } : {}) },
           ...(this.postData !== undefined ? { body: this.postData } : {}),
         });
         return { status: res.status, headers: res.headers, body: res.text(), buffer: res.body, json: () => res.json() };
@@ -1451,6 +1219,8 @@ export class VeloxPage extends Emitter {
    * Waiting on downloads/files must arm capture BEFORE the caller acts, otherwise
    * the action can race the Browser.setDownloadBehavior command and the file is
    * never written. (Plain `on(...)` stays fire-and-forget: the caller acts later.)
+   * This is the ONE waitForEvent override: arm download capture for the events that
+   * need it, then delegate to Emitter's implementation.
    */
   async waitForEvent(event, opts = {}) {
     if (event === 'download' || event === 'filechooser') await this._ensureDownloads();
@@ -1557,36 +1327,10 @@ export class VeloxPage extends Emitter {
 
   /* ------------------------------------------- waits & events ------------------------------------------- */
 
-  /** Generic: await the next event with optional predicate. */
-  waitForEvent(name, { predicate, timeout = 30000 } = {}) {
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => { off(); reject(new TimeoutError(`event ${name}`, timeout)); }, timeout);
-      const off = this.on(name, (p) => {
-        if (predicate && !predicate(p)) return;
-        clearTimeout(t); off(); resolve(p);
-      });
-    });
-  }
+  // waitForEvent is overridden once (see the downloads section): arm download
+  // capture when needed, otherwise Emitter.waitForEvent handles every event.
 
-  /** Wait for a request matching url (string/regex/predicate) → request entry. */
-  waitForRequest(match, { timeout = 30000 } = {}) {
-    const pred = toMatcher(match);
-    return this.waitForEvent('request', { predicate: (e) => pred(e.url), timeout });
-  }
-  /**
-   * Wait for a response matching url/regex/predicate. Resolves with a response object:
-   *   const r = await page.waitForResponse(/checkout\/.*\/pay/);
-   *   await r.json() / await r.text() / r.status / r.headers / r.entry
-   */
-  async waitForResponse(match, { timeout = 30000 } = {}) {
-    const pred = toMatcher(match);
-    const entry = await this.waitForEvent('response', { predicate: (e) => pred(e.url), timeout });
-    return asResponse(entry, this);
-  }
-  waitForRequestFinished(match, { timeout = 30000 } = {}) {
-    const pred = toMatcher(match);
-    return this.waitForEvent('requestfinished', { predicate: (e) => pred(e.url), timeout });
-  }
+  /** Wait for a request/response/requestfinished → see nettrack.js (assigned below). */
   waitForDialog(timeout = 30000) { return this.waitForEvent('dialog', { timeout }); }
   waitForPopup(timeout = 30000) {
     return this.waitForEvent('popup', { timeout }).catch(() => this.waitForEvent('target', { timeout }));
@@ -1714,15 +1458,6 @@ export class VeloxPage extends Emitter {
   }
 }
 
-function normKey(k, dir) {
-  const raw = String(k);
-  const lower = raw.toLowerCase();
-  const m = KEYMAP[lower];
-  if (m) return { key: m.key, code: m.code, windowsVirtualKeyCode: m.keyCode, nativeVirtualKeyCode: m.keyCode, ...(dir === 'down' && m.text ? { text: m.text } : {}) };
-  const upper = raw.toUpperCase();
-  return { key: raw, code: /^[a-z0-9]$/i.test(raw) ? 'Key' + upper : undefined, windowsVirtualKeyCode: upper.charCodeAt(0) || undefined, ...(dir === 'down' && raw.length === 1 ? { text: raw } : {}) };
-}
-
 export function defaultBlocklist() {
   return [
     'doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'google-analytics.com',
@@ -1736,111 +1471,12 @@ export function defaultBlocklist() {
 
 /* ---------------------------------------------- helpers ---------------------------------------------- */
 
-function toMatcher(match) {
-  if (typeof match === 'function') return match;
-  if (match instanceof RegExp) return (u) => match.test(u);
-  if (typeof match === 'string' && match.includes('*')) {
-    const re = new RegExp('^' + match.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^]*').replace(/\u0000/g, '[^]*').replace(/\?/g, '.') + '$');
-    return (u) => re.test(u);
-  }
-  const s = String(match);
-  return (u) => u === s || u.startsWith(s + '?') || u.includes(s);
-}
-
-/** Download object handed to page.on('download', dl) / page.waitForDownload(). */
-export class Download {
-  constructor(page, guid, url, suggestedFilename) {
-    this.page = page;
-    this.guid = guid;
-    this.url = url;
-    this.suggestedFilename = suggestedFilename;
-    this.state = 'inProgress';
-    this.receivedBytes = 0;
-    this.totalBytes = 0;
-    this._done = null;
-    this._path = null;
-  }
-  _update(p) {
-    if (p.state) this.state = p.state;
-    if (p.receivedBytes != null) this.receivedBytes = p.receivedBytes;
-    if (p.totalBytes != null) this.totalBytes = p.totalBytes;
-    if ((p.state === 'completed' || p.state === 'canceled') && this._done) { this._done(); this._done = null; }
-  }
-  /** Resolves when the download finishes. */
-  finished(timeout = 30000) {
-    if (this.state === 'completed' || this.state === 'canceled') return Promise.resolve(this);
-    return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new TimeoutError('download', timeout)), timeout);
-      this._done = () => { clearTimeout(t); resolve(this); };
-    });
-  }
-  /** Where the browser is writing it (allowAndName: guid file inside the download dir). */
-  path() {
-    const dir = this.page._downloads;
-    return dir ? join(dir, this.guid) : null;
-  }
-  /** Copy to a friendly filename once complete. */
-  async saveAs(target) {
-    if (this.state !== 'completed') await this.finished();
-    if (this.state === 'canceled') throw new Error('download canceled');
-    const src = this.path();
-    if (!src) throw new Error('download dir not configured');
-    const { copyFileSync, mkdirSync, existsSync } = await import('node:fs');
-    const { dirname } = await import('node:path');
-    // Chrome renames its .crdownload temp to the guid name shortly AFTER reporting
-    // 'completed' — poll for it first.
-    const deadline = Date.now() + 15000;
-    while (!existsSync(src) && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-    mkdirSync(dirname(target), { recursive: true });
-    if (existsSync(src)) {
-      copyFileSync(src, target);
-    } else {
-      // Fallback: headless browsers occasionally finish a download without landing the
-      // file (seen with --remote-debugging-pipe). Fetch the bytes ourselves with the
-      // page's cookies so saveAs() is deterministic instead of mysteriously empty.
-      const { fetch: liteFetch } = await import('../lite/engine.js');
-      const cookies = await this.page.cookies([this.url]).catch(() => []);
-      const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-      const res = await liteFetch(this.url, {
-        timeout: 60000,
-        headers: { ...(cookieHeader ? { cookie: cookieHeader } : {}) },
-        maxRedirects: 10,
-      });
-      writeFileSync(target, res.body);
-      this._fetchedDirectly = true;
-    }
-    this._path = target;
-    return target;
-  }
-  async cancel() {
-    await this.page.conn.send('Browser.cancelDownload', { guid: this.guid }).catch(() => {});
-    this.state = 'canceled';
-    if (this._done) { this._done(); this._done = null; }
-  }
-  get filename() { return this.suggestedFilename; }
-}
-
-/** WebSocket tracker handed to page.on('websocket', ws). */
-export class WebSocketTracker extends Emitter {  constructor(page, id, url) {
-    super();
-    this.page = page;
-    this.id = id;
-    this.url = url;
-    this.framesSent = [];
-    this.framesReceived = [];
-    this.headers = null;
-    this.closedAt = null;
-  }
-  handshake(response) { this.headers = response?.headers || null; this.status = response?.status; }
-  frame(dir, payload, timestamp) {
-    let text = null;
-    try { text = Buffer.from(payload.payloadData, 'base64').toString('utf8'); } catch { text = payload.payloadData; }
-    const rec = { dir, text, opcode: payload.opcode, timestamp, ws: this };
-    (dir === 'sent' ? this.framesSent : this.framesReceived).push(rec);
-    this.emit(dir === 'sent' ? 'framesent' : 'framereceived', rec);
-  }
-  closed(timestamp) { this.closedAt = timestamp ?? Date.now() / 1000; this.emit('close', this); }
-  get isClosed() { return this.closedAt != null; }
-}
+// Methods extracted into focused modules, mounted on the same prototype so the
+// public surface, middleware wrapping and `this` binding are unchanged.
+Object.assign(VeloxPage.prototype, {
+  screenshot: _screenshot,
+  pdf: _pdf,
+  _onRequest, _onResponse, _onDone,
+  requests, body, har, transferred, blockedRequests,
+  waitForRequest, waitForResponse, waitForRequestFinished,
+});

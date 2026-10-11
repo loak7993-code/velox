@@ -2,7 +2,7 @@
 // transparently escalate to a real browser the moment a page needs one.
 import { fetch as liteFetch, CookieJar, needsJS } from './lite/engine.js';
 import { Browser } from './cdp/browser.js';
-import { normHeaders, sleep } from './util.js';
+import { sleep } from './util.js';
 import { getConfig, applyPageOptions } from './plugins.js';
 
 /** Open a URL. engine: 'auto' (default) | 'lite' (never escalate) | 'cdp' (always browser). */
@@ -265,15 +265,9 @@ export class BrowserSession {
   async close() { await this.page.browser.close(); }
 }
 
-/** LiteSession gains the escalatable page surface (constructed here to avoid cycles). */
+/** LiteSession gains the escalatable page surface (explicit methods above win). */
 for (const name of SESSION_PAGE_METHODS) {
-  if (LiteSession.prototype[name]) continue;         // explicit methods above win
-  LiteSession.prototype[name] = function (...args) { return this._op(name, ...args); };
-}
-
-/** LiteSession gains the escalatable page surface (constructed here to avoid cycles). */
-for (const name of SESSION_PAGE_METHODS) {
-  if (LiteSession.prototype[name]) continue;         // explicit methods above win
+  if (LiteSession.prototype[name]) continue;
   LiteSession.prototype[name] = function (...args) { return this._op(name, ...args); };
 }
 

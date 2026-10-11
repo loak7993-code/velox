@@ -33,6 +33,36 @@ export const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1))
 /** Human-like delay: jittered around target */
 export const humanDelay = (ms_) => sleep(Math.max(1, Math.round(ms_ * (0.5 + Math.random()))));
 
+/** Glob → RegExp: `*` any run, `**` any run incl. `/`, `?` one char. One canonical copy. */
+export function globToRe(glob) {
+  return new RegExp('^' + glob.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*\*/g, '\u0000').replace(/\*/g, '[^]*').replace(/\u0000/g, '[^]*').replace(/\?/g, '.') + '$');
+}
+
+/**
+ * Run `fn(item, i)` over items with at most `concurrency` workers, preserving
+ * order in the result. The shared worker-pool behind page.batch(), fetchAll()
+ * and Pool.map() — one cursor loop instead of three copies.
+ */
+export async function mapConcurrent(items, concurrency, fn) {
+  const n = Math.max(1, Math.min(concurrency || items.length, items.length));
+  const results = new Array(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: n }, async () => {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }));
+  return results;
+}
+
+/** `a=1; b=2` cookie header from CDP cookie objects. */
+export function cookieHeader(cookies) {
+  const out = (cookies || []).map((c) => `${c.name}=${c.value}`).join('; ');
+  return out || null;
+}
+
 /** Tiny event emitter */
 export class Emitter {
   constructor() { this._h = new Map(); }
@@ -47,10 +77,22 @@ export class Emitter {
   }
   off(ev, fn) { this._h.get(ev)?.delete(fn); }
   emit(ev, ...args) {
+    // single-handler sets (the overwhelmingly common case — one page listener per
+    // CDP event) dispatch without the defensive copy: snapshot semantics are kept
+    // by taking the lone handler before invoking, so handlers added mid-emit are
+    // not visited, exactly like the multi-handler path below.
     const set = this._h.get(ev);
-    if (set) for (const fn of [...set]) { try { fn(...args); } catch (e) { this.emit('error', e); } }
+    if (set) {
+      if (set.size === 1) {
+        const fn = set.values().next().value;
+        try { fn(...args); } catch (e) { this.emit('error', e); }
+      } else for (const fn of [...set]) { try { fn(...args); } catch (e) { this.emit('error', e); } }
+    }
     const any = this._h.get('*');
-    if (any) for (const fn of [...any]) { try { fn(ev, ...args); } catch {} }
+    if (any) {
+      if (any.size === 1) { const fn = any.values().next().value; try { fn(ev, ...args); } catch {} }
+      else for (const fn of [...any]) { try { fn(ev, ...args); } catch {} }
+    }
   }
   /** Await the next occurrence of an event (optional predicate + timeout). */
   waitForEvent(ev, { predicate, timeout = 30000 } = {}) {
@@ -78,25 +120,16 @@ export function isObj(o) { return o && typeof o === 'object' && !Array.isArray(o
 
 /**
  * Compact an injected script without a parser: drops whole-line comments,
- * indentation, blank lines and inline comments that sit outside quotes/URLs.
- * Keeps the source readable in the repo while shipping fewer bytes per page.
+ * indentation and blank lines. Inline comments are left alone on purpose —
+ * telling `//` inside a URL, regex or template literal apart without a parser
+ * is not worth the corruption risk, and inert comments cost nothing at runtime.
  */
 export function compactSource(src) {
   const out = [];
-  for (let line of String(src).split('\n')) {
+  for (const line of String(src).split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('//')) continue;
-    // inline comment: only when the slash is not part of a URL and nothing before it
-    // looks like a string (cheap, conservative check)
-    const idx = trimmed.indexOf('//');
-    if (idx > 0) {
-      const before = trimmed.slice(0, idx);
-      const safe = !/["'`]/.test(before) && !before.endsWith(':');
-      if (safe && (before.endsWith(';') || before.endsWith('}') || before.endsWith(',') || before.endsWith(')'))) {
-        line = before;
-      }
-    }
-    out.push(line === trimmed ? trimmed : trimmed);
+    out.push(trimmed);
   }
   return out.join('\n');
 }

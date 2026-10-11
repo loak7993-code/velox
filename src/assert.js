@@ -5,7 +5,7 @@ import { sleep } from './util.js';
 const noop = () => {};
 
 class Expectation {
-  constructor(target, opts) { this.target = target; this.opts = opts || {}; this.not = { ...this, _negated: true }; this._negated = false; }
+  constructor(target, opts) { this.target = target; this.opts = opts || {}; this._negated = false; }
 
   async _poll(fn, { timeout = 5000, message } = {}) {
     const t0 = Date.now();

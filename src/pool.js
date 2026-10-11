@@ -1,5 +1,6 @@
 // velox :: pool.js — pre-warmed browser/page pool for parallel work
 import { Browser } from './cdp/browser.js';
+import { mapConcurrent } from './util.js';
 
 export class Pool {
   /**
@@ -75,19 +76,9 @@ export class Pool {
   }
 
   /** map over items in parallel across the pool. */
-  async map(items, fn, { concurrency } = {}) {
+  map(items, fn, { concurrency } = {}) {
     const n = Math.min(concurrency || this.opts.browsers * this.opts.pagesPerBrowser, items.length);
-    let i = 0;
-    const results = new Array(items.length);
-    const workers = Array.from({ length: n }, async () => {
-      for (;;) {
-        const idx = i++;
-        if (idx >= items.length) break;
-        results[idx] = await this.use((p) => fn(items[idx], p, idx));
-      }
-    });
-    await Promise.all(workers);
-    return results;
+    return mapConcurrent(items, n, (item, idx) => this.use((p) => fn(item, p, idx)));
   }
 
   async close() {

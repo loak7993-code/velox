@@ -155,7 +155,8 @@ await soft('plugins.blockImages()', async () => {
   const blocked = imgs.filter((r) => !r.response || r.failed).length;
   const ok = imgs.length >= 5 && blocked === imgs.length;
   await b.close();
-  return ok, `images=${imgs.length} blocked=${blocked}`;
+  if (!ok) throw new Error(`images=${imgs.length} blocked=${blocked}`);
+  return true;
 });
 
 await soft('plugins.proxyRotate(pool)', async () => {

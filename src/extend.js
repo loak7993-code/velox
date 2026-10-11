@@ -9,7 +9,6 @@
 //   });
 //   velox.registerSelectorEngine('priceAbove', (value, root) => [...]); // 'priceAbove=25'
 //   velox.hook('onNavigation', (page, url) => console.log('→', url));
-import { Emitter } from './util.js';
 
 const registry = {
   middleware: [],
@@ -52,7 +51,6 @@ export function hook(name, fn) {
 export function runHooks(name, ...args) {
   for (const fn of registry.hooks[name] || []) { try { fn(...args); } catch {} }
 }
-export function hasHooks(name) { return (registry.hooks[name] || []).length > 0; }
 
 /** The middleware chain, exposed for the page proxy. */
 export function chainFor(page) {
@@ -77,9 +75,6 @@ function defineCommand(proto, name, fn) {
   return true;
 }
 
-/** Kept for callers that used to attach per instance (now a no-op). */
-export function applyExtensions(target) { return target; }
-
 /** Namespace for user extensions: page.ext.anything = … */
 export function makeExtNamespace(target) {
   const ext = Object.create(null);
@@ -101,6 +96,3 @@ export function selectorEngineSource() {
   const defs = [...registry.selectorEngines.entries()].map(([name, src]) => `__vlx.custom[${JSON.stringify(name)}] = (${src});`).join('\n');
   return `(function(){ var e = window.__vlx || {}; var c = e.custom || (e.custom = {}); if (!c.__globalLoaded) { ${defs} c.__globalLoaded = 1; } })();`;
 }
-
-export const _registry = registry;
-export { Emitter };

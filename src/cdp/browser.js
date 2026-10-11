@@ -9,8 +9,7 @@ import { VeloxPage } from './page.js';
 import { BrowserContext } from './context.js';
 import { proxyFlags, normalizeProxy } from '../proxy.js';
 import { proxyForward } from '../forward.js';
-import { getConfig, applyLaunchOptions, runHook, hasHook } from '../plugins.js';
-import { applyExtensions } from '../extend.js';
+import { getConfig, applyLaunchOptions, runHook } from '../plugins.js';
 import { Emitter } from '../util.js';
 
 const HEADLESS_OK = (p) => !/headless-shell/i.test(p);
@@ -436,15 +435,13 @@ export class Browser extends Emitter {
       // under load a renderer can be slow or wedged, and a one-round-trip probe is far
       // cheaper than the caller discovering it. Failing the probe falls back to a
       // normal (cold) page, so correctness never depends on the spare being good.
-      {
-        let unrefProbe;
-        const probeTimer = new Promise((r) => { unrefProbe = setTimeout(() => r(false), 3000); unrefProbe.unref?.(); });
-        const healthy = await Promise.race([
-          warm.session.send('Runtime.evaluate', { expression: '1', returnByValue: true }, { timeout: 2500 }).then(() => true, () => false),
-          probeTimer,
-        ]);
-        clearTimeout(unrefProbe);
-      }
+      let unrefProbe;
+      const probeTimer = new Promise((r) => { unrefProbe = setTimeout(() => r(false), 3000); unrefProbe.unref?.(); });
+      const healthy = await Promise.race([
+        warm.session.send('Runtime.evaluate', { expression: '1', returnByValue: true }, { timeout: 2500 }).then(() => true, () => false),
+        probeTimer,
+      ]);
+      clearTimeout(unrefProbe);
       if (!healthy) {
         warm.close().catch(() => {});
         warm = null;

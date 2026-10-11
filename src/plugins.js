@@ -137,16 +137,9 @@ const pluginsNs = {
   /** Skip heavy resources — big speed win on image/media-heavy sites. */
   blockImages: ({ fonts = true, media = true } = {}) => ({
     name: 'block-images',
-    pageOptions: (o) => ({ ...o, _skipResources: true }),
-    onPage: null,
-    onRequest: null,
-    _types: { image: true, ...(fonts ? { font: true } : {}), ...(media ? { media: true } : {}) },
-    setup() {},
-    pageSetup(page) {
-      page.route('**/*', (req) => {
-        const t = req.resourceType;
-        return (t === 'Image' || t === 'Font' || t === 'Media') ? req.abort() : req.continue();
-      });
+    onPage(page) {
+      const types = { Image: true, ...(fonts ? { Font: true } : {}), ...(media ? { Media: true } : {}) };
+      page.route('**/*', (req) => types[req.resourceType] ? req.abort() : req.continue());
     },
   }),
 
@@ -180,12 +173,6 @@ const pluginsNs = {
     name: 'proxy-rotate',
     launchOptions(o) {
       if (o.proxy) return o;                       // an explicit proxy always wins
-      const p = stickyKey ? pool.sticky(stickyKey) : pool.next();
-      return { ...o, proxy: typeof p.toProxy === 'function' ? p.toProxy() : p };
-    },
-    // context-level rotation for callers that build contexts themselves
-    contextOptions(o) {
-      if (o.proxy) return o;
       const p = stickyKey ? pool.sticky(stickyKey) : pool.next();
       return { ...o, proxy: typeof p.toProxy === 'function' ? p.toProxy() : p };
     },
